@@ -210,7 +210,6 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private async Task<string> GetAuthenticatedOnHostAsync(PluginConfiguration config, Uri baseUri, string relative, CancellationToken cancellationToken)
     {
         var host = baseUri.Host;
-        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (!_sessions.TryGetValue(host, out var session))
         {
             session = SessionCookie.Normalize(config.RuTrackerSessionCookie)
@@ -281,6 +280,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 1. Reachability: the site answers and it is really RuTracker.
         try
         {
+            var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
             var html = await GetPageAsync(baseUri, IndexPage, null, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             var title = TrackerHtmlParser.ExtractTitle(html);
             steps.Add(new DiagnosticStep($"{host}: соединение", true, title.Length > 0 ? $"Сайт отвечает: «{title}»." : "Сайт отвечает."));

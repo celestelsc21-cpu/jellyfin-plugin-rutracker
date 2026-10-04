@@ -53,6 +53,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public string RuTrackerSessionCookie { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets a manually supplied Cloudflare <c>cf_clearance</c> cookie.
+    /// </summary>
+    public string RuTrackerCloudflareCookie { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the browser User-Agent matching the Cloudflare clearance cookie.
+    /// </summary>
+    public string RuTrackerUserAgent { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the qBittorrent Web UI URL, e.g. <c>http://192.168.1.20:8080</c>.
     /// </summary>
     public string QBittorrentUrl { get; set; } = string.Empty;
