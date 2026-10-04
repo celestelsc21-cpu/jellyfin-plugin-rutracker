@@ -1,0 +1,124 @@
+[
+  {
+    "guid": "6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93",
+    "versions": [
+      {
+        "version": "0.4.4.0",
+        "changelog": "0.4.4.0 - Downloading files are probed with ffprobe before playback, so Jellyfin knows\ntheir codecs and only remuxes compatible files instead of re-encoding everything;\nduration and seeking now work in the RuTracker channel.\n0.4.3.0 - Fix \"the process cannot access the file\" in qBittorrent on Windows while\nwatching: the stream now reads the file without locking it (SMB mounts turned the lock\ninto a Windows file lock). Torrents stopped by a file error are resumed automatically.\n0.4.2.0 - \"Разрешить канал всем с ролью «Поиск»\" button: adds the RuTracker channel to\nthe allowed channels of users whose Jellyfin profile does not allow channels.\n0.4.1.0 - \"Проверить канал и папки\" button: shows which users see the RuTracker channel\nand why not, and whether Jellyfin can write to the download folders. Write errors\n(e.g. a read-only mount) are logged once instead of every few seconds.\n0.4.0.0 - Watch while downloading: \"RuTracker\" channel lists active downloads and\nplays episodes as soon as their pieces arrive (the played episode jumps to the front).\nEach release gets its own \"Title (Year)\" folder; unfinished files are hidden with a\n.ignore file; \"copy after download\" mode implemented; finished episodes appear in the\nlibrary immediately. Starting episode can be chosen for magnet-only topics. Search\nnow shows the \"[Док] Разное / некондиция\" forum and other \"[Док]\" forums.\n0.3.0.0 - Downloads through qBittorrent: \"Смотреть\" button with type, folder and\nstarting episode; whole torrent downloaded in watching order (chosen episode first);\ndownloads tab with progress, episode switching and cancel.\n0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.4.4.0/rutracker_0.4.4.0.zip",
+        "checksum": "c2e75c7c0c8f0106ee8fba12eb201b24",
+        "timestamp": "2026-10-04T11:45:52Z"
+      },
+      {
+        "version": "0.4.3.0",
+        "changelog": "0.4.3.0 - Fix \"the process cannot access the file\" in qBittorrent on Windows while\nwatching: the stream now reads the file without locking it (SMB mounts turned the lock\ninto a Windows file lock). Torrents stopped by a file error are resumed automatically.\n0.4.2.0 - \"Разрешить канал всем с ролью «Поиск»\" button: adds the RuTracker channel to\nthe allowed channels of users whose Jellyfin profile does not allow channels.\n0.4.1.0 - \"Проверить канал и папки\" button: shows which users see the RuTracker channel\nand why not, and whether Jellyfin can write to the download folders. Write errors\n(e.g. a read-only mount) are logged once instead of every few seconds.\n0.4.0.0 - Watch while downloading: \"RuTracker\" channel lists active downloads and\nplays episodes as soon as their pieces arrive (the played episode jumps to the front).\nEach release gets its own \"Title (Year)\" folder; unfinished files are hidden with a\n.ignore file; \"copy after download\" mode implemented; finished episodes appear in the\nlibrary immediately. Starting episode can be chosen for magnet-only topics. Search\nnow shows the \"[Док] Разное / некондиция\" forum and other \"[Док]\" forums.\n0.3.0.0 - Downloads through qBittorrent: \"Смотреть\" button with type, folder and\nstarting episode; whole torrent downloaded in watching order (chosen episode first);\ndownloads tab with progress, episode switching and cancel.\n0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.4.3.0/rutracker_0.4.3.0.zip",
+        "checksum": "b61897c7ca6397584275074fa68d7d24",
+        "timestamp": "2026-10-04T11:30:37Z"
+      },
+      {
+        "version": "0.4.2.0",
+        "changelog": "0.4.2.0 - \"Разрешить канал всем с ролью «Поиск»\" button: adds the RuTracker channel to\nthe allowed channels of users whose Jellyfin profile does not allow channels.\n0.4.1.0 - \"Проверить канал и папки\" button: shows which users see the RuTracker channel\nand why not, and whether Jellyfin can write to the download folders. Write errors\n(e.g. a read-only mount) are logged once instead of every few seconds.\n0.4.0.0 - Watch while downloading: \"RuTracker\" channel lists active downloads and\nplays episodes as soon as their pieces arrive (the played episode jumps to the front).\nEach release gets its own \"Title (Year)\" folder; unfinished files are hidden with a\n.ignore file; \"copy after download\" mode implemented; finished episodes appear in the\nlibrary immediately. Starting episode can be chosen for magnet-only topics. Search\nnow shows the \"[Док] Разное / некондиция\" forum and other \"[Док]\" forums.\n0.3.0.0 - Downloads through qBittorrent: \"Смотреть\" button with type, folder and\nstarting episode; whole torrent downloaded in watching order (chosen episode first);\ndownloads tab with progress, episode switching and cancel.\n0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.4.2.0/rutracker_0.4.2.0.zip",
+        "checksum": "54c53ddd7e6941f9f2048c25bb0973b8",
+        "timestamp": "2026-10-04T11:15:28Z"
+      },
+      {
+        "version": "0.4.1.0",
+        "changelog": "0.4.1.0 - \"Проверить канал и папки\" button: shows which users see the RuTracker channel\nand why not, and whether Jellyfin can write to the download folders. Write errors\n(e.g. a read-only mount) are logged once instead of every few seconds.\n0.4.0.0 - Watch while downloading: \"RuTracker\" channel lists active downloads and\nplays episodes as soon as their pieces arrive (the played episode jumps to the front).\nEach release gets its own \"Title (Year)\" folder; unfinished files are hidden with a\n.ignore file; \"copy after download\" mode implemented; finished episodes appear in the\nlibrary immediately. Starting episode can be chosen for magnet-only topics. Search\nnow shows the \"[Док] Разное / некондиция\" forum and other \"[Док]\" forums.\n0.3.0.0 - Downloads through qBittorrent: \"Смотреть\" button with type, folder and\nstarting episode; whole torrent downloaded in watching order (chosen episode first);\ndownloads tab with progress, episode switching and cancel.\n0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.4.1.0/rutracker_0.4.1.0.zip",
+        "checksum": "1b16b190623c93d0cff988317b992244",
+        "timestamp": "2026-10-04T10:48:30Z"
+      },
+      {
+        "version": "0.4.0.0",
+        "changelog": "0.4.0.0 - Watch while downloading: \"RuTracker\" channel lists active downloads and\nplays episodes as soon as their pieces arrive (the played episode jumps to the front).\nEach release gets its own \"Title (Year)\" folder; unfinished files are hidden with a\n.ignore file; \"copy after download\" mode implemented; finished episodes appear in the\nlibrary immediately. Starting episode can be chosen for magnet-only topics. Search\nnow shows the \"[Док] Разное / некондиция\" forum and other \"[Док]\" forums.\n0.3.0.0 - Downloads through qBittorrent: \"Смотреть\" button with type, folder and\nstarting episode; whole torrent downloaded in watching order (chosen episode first);\ndownloads tab with progress, episode switching and cancel.\n0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.4.0.0/rutracker_0.4.0.0.zip",
+        "checksum": "37555cbfbbebfc439e7c78cddd3dd7e1",
+        "timestamp": "2026-10-04T10:23:35Z"
+      },
+      {
+        "version": "0.3.0.0",
+        "changelog": "0.3.0.0 - Downloads through qBittorrent: \"Смотреть\" button with type, folder and\nstarting episode; whole torrent downloaded in watching order (chosen episode first);\ndownloads tab with progress, episode switching and cancel.\n0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.3.0.0/rutracker_0.3.0.0.zip",
+        "checksum": "fe4ff8281985d4f5543bd357539a6c47",
+        "timestamp": "2026-10-04T09:44:09Z"
+      },
+      {
+        "version": "0.2.6.0",
+        "changelog": "0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;\nmulti-select filters by forum and uploader; uploader shown in results.\n0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.6.0/rutracker_0.2.6.0.zip",
+        "checksum": "d3bb703a5fd507b38365e551d235d93c",
+        "timestamp": "2026-10-04T09:21:41Z"
+      },
+      {
+        "version": "0.2.5.0",
+        "changelog": "0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.\n0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.5.0/rutracker_0.2.5.0.zip",
+        "checksum": "f0568517d84bd0fa46c6fd4c21704d0b",
+        "timestamp": "2026-10-04T09:11:49Z"
+      },
+      {
+        "version": "0.2.4.0",
+        "changelog": "0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection\ncheck now searches a Cyrillic title; no needless re-login when the session is valid.\n0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.4.0/rutracker_0.2.4.0.zip",
+        "checksum": "33642beacb19b1faf5107e8a1bcc30e1",
+        "timestamp": "2026-10-04T08:33:00Z"
+      },
+      {
+        "version": "0.2.3.0",
+        "changelog": "0.2.3.0 - Connection check also tests the search page; password login pauses for\n15 minutes after RuTracker refuses it; clearer message when the cookie stops working.\n0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.3.0/rutracker_0.2.3.0.zip",
+        "checksum": "89ed3ff260a59de70ce2324b4804aab3",
+        "timestamp": "2026-10-04T08:30:10Z"
+      },
+      {
+        "version": "0.2.2.0",
+        "changelog": "0.2.2.0 - RuTracker login now opens the login page first (service cookies, hidden\nform fields, captcha detection) like a browser; clearer login diagnostics.\n0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.2.0/rutracker_0.2.2.0.zip",
+        "checksum": "1634f37fcc493d83d0956aba96eb4c2d",
+        "timestamp": "2026-10-04T06:42:49Z"
+      },
+      {
+        "version": "0.2.1.0",
+        "changelog": "0.2.1.0 - Alternative RuTracker address with automatic fallback; detection of\nISP block pages; step-by-step connection checks for RuTracker and qBittorrent.\n0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.1.0/rutracker_0.2.1.0.zip",
+        "checksum": "b902d15267bd6c98b01e1b5ad67fea50",
+        "timestamp": "2026-10-04T06:35:32Z"
+      },
+      {
+        "version": "0.2.0.0",
+        "changelog": "0.2.0.0 - RuTracker search page and a header button in the web client;\nadmin check of RuTracker login.\n0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.2.0.0/rutracker_0.2.0.0.zip",
+        "checksum": "5cffd1973044a29a5f6fca00ca48fdd9",
+        "timestamp": "2026-10-04T06:22:46Z"
+      },
+      {
+        "version": "0.1.0.0",
+        "changelog": "0.1.0.0 - Stage 1: plugin skeleton, configuration, role-based access.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/celestelsc21-cpu/jellyfin-plugin-rutracker/releases/download/v0.1.0.0/rutracker_0.1.0.0.zip",
+        "checksum": "18558814f012c893ab38df101c71a53a",
+        "timestamp": "2026-10-04T05:35:00Z"
+      }
+    ],
+    "name": "RuTracker",
+    "description": "Search movies, series and TV shows on RuTracker, download them through a qBittorrent instance with sequential episode ordering, stream while downloading, and track topic updates.",
+    "overview": "Search RuTracker and download/stream torrents via qBittorrent",
+    "owner": "celesta",
+    "category": "General"
+  }
+]
