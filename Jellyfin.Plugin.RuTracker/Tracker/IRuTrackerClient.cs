@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.RuTracker.Diagnostics;
 
 namespace Jellyfin.Plugin.RuTracker.Tracker;
 
@@ -11,6 +12,7 @@ public interface IRuTrackerClient
 {
     /// <summary>
     /// Searches torrents. Results are cached for a short time.
+    /// Falls back to the alternative address when the main one is unreachable.
     /// </summary>
     /// <param name="query">Normalized query (see <see cref="SearchQuery.Normalize"/>).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -19,10 +21,9 @@ public interface IRuTrackerClient
     Task<IReadOnlyList<TorrentInfo>> SearchAsync(string query, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Verifies that the configured credentials allow logging in.
+    /// Checks every configured address step by step: reachability, login, session.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task completing when the check succeeds.</returns>
-    /// <exception cref="RuTrackerException">Login failed; the message explains why.</exception>
-    Task CheckLoginAsync(CancellationToken cancellationToken);
+    /// <returns>The report.</returns>
+    Task<DiagnosticReport> DiagnoseAsync(CancellationToken cancellationToken);
 }

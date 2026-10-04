@@ -31,6 +31,18 @@ internal static partial class ConfigurationValidator
             errors.Add("Адрес RuTracker должен быть https-адресом rutracker.org / .net / .nl.");
         }
 
+        if (!string.IsNullOrWhiteSpace(config.RuTrackerMirrorUrl))
+        {
+            if (!IsAllowedRuTrackerUrl(config.RuTrackerMirrorUrl))
+            {
+                errors.Add("Альтернативный адрес RuTracker должен быть https-адресом rutracker.org / .net / .nl.");
+            }
+            else if (string.Equals(config.RuTrackerMirrorUrl.TrimEnd('/'), config.RuTrackerBaseUrl?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add("Альтернативный адрес RuTracker совпадает с основным.");
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(config.RuTrackerSessionCookie)
             && (string.IsNullOrWhiteSpace(config.RuTrackerUsername) || string.IsNullOrEmpty(config.RuTrackerPassword)))
         {

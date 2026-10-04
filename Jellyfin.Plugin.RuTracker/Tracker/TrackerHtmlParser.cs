@@ -34,6 +34,51 @@ internal static partial class TrackerHtmlParser
         => html.Contains("name=\"cap_sid\"", StringComparison.Ordinal);
 
     /// <summary>
+    /// Gets a value indicating whether the page comes from RuTracker at all.
+    /// ISP block pages and captive portals answer 200 with unrelated content.
+    /// </summary>
+    /// <param name="html">Page HTML.</param>
+    /// <returns><c>true</c> if the page looks like a RuTracker page.</returns>
+    public static bool LooksLikeRuTracker(string html)
+        => html.Contains("rutracker", StringComparison.OrdinalIgnoreCase)
+           || html.Contains("bb_session", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Extracts the page title, shortened for display.
+    /// </summary>
+    /// <param name="html">Page HTML.</param>
+    /// <returns>The title, or an empty string.</returns>
+    public static string ExtractTitle(string html)
+    {
+        var match = TitleTag().Match(html);
+        if (!match.Success)
+        {
+            return string.Empty;
+        }
+
+        var title = Clean(System.Net.WebUtility.HtmlDecode(match.Groups[1].Value));
+        return title.Length > 80 ? title[..80] + "…" : title;
+    }
+
+    /// <summary>
+    /// Extracts the error message RuTracker shows on a failed login (wrong password, ban, ...).
+    /// </summary>
+    /// <param name="html">Login response HTML.</param>
+    /// <returns>The message, or <c>null</c>.</returns>
+    public static string? ExtractLoginError(string html)
+    {
+        var parser = new HtmlParser();
+        using var document = parser.ParseDocument(html);
+        var text = Clean(document.QuerySelector("h4.warnColor1, div.msg-main")?.TextContent);
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        return text.Length > 200 ? text[..200] + "…" : text;
+    }
+
+    /// <summary>
     /// Parses the result table of <c>tracker.php</c>.
     /// </summary>
     /// <param name="html">Page HTML.</param>
@@ -134,4 +179,7 @@ internal static partial class TrackerHtmlParser
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
+
+    [GeneratedRegex(@"<title[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex TitleTag();
 }

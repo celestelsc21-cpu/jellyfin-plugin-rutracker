@@ -31,6 +31,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public string RuTrackerBaseUrl { get; set; } = "https://rutracker.org";
 
     /// <summary>
+    /// Gets or sets the alternative RuTracker URL used when the main one is unreachable.
+    /// Empty disables the fallback.
+    /// </summary>
+    public string RuTrackerMirrorUrl { get; set; } = "https://rutracker.net";
+
+    /// <summary>
     /// Gets or sets the RuTracker login.
     /// </summary>
     public string RuTrackerUsername { get; set; } = string.Empty;

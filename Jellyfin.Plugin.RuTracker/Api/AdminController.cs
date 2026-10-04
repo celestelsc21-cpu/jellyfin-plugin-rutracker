@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.RuTracker.Api.Models;
 using Jellyfin.Plugin.RuTracker.Configuration;
+using Jellyfin.Plugin.RuTracker.Diagnostics;
+using Jellyfin.Plugin.RuTracker.QBittorrent;
 using Jellyfin.Plugin.RuTracker.Tracker;
 using MediaBrowser.Common.Api;
 using Microsoft.AspNetCore.Authorization;
@@ -24,16 +26,19 @@ public class AdminController : ControllerBase
 {
     private readonly IPluginConfigurationAccessor _config;
     private readonly IRuTrackerClient _client;
+    private readonly IQBittorrentClient _qbittorrent;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AdminController"/> class.
     /// </summary>
     /// <param name="config">Configuration accessor.</param>
     /// <param name="client">RuTracker client.</param>
-    public AdminController(IPluginConfigurationAccessor config, IRuTrackerClient client)
+    /// <param name="qbittorrent">qBittorrent client.</param>
+    public AdminController(IPluginConfigurationAccessor config, IRuTrackerClient client, IQBittorrentClient qbittorrent)
     {
         _config = config;
         _client = client;
+        _qbittorrent = qbittorrent;
     }
 
     /// <summary>
@@ -62,25 +67,24 @@ public class AdminController : ControllerBase
     }
 
     /// <summary>
-    /// Checks that the server can log in to RuTracker with the saved settings.
+    /// Checks the RuTracker connection step by step for the main and alternative addresses.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <response code="200">Login succeeded.</response>
-    /// <response code="502">Login failed; the message explains why.</response>
-    /// <returns>A status message.</returns>
+    /// <response code="200">Check performed; see <see cref="DiagnosticReport.Success"/>.</response>
+    /// <returns>The step-by-step report.</returns>
     [HttpPost("TestRuTracker")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public async Task<ActionResult<MessageDto>> TestRuTracker(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _client.CheckLoginAsync(cancellationToken).ConfigureAwait(false);
-            return new MessageDto("Вход на RuTracker выполнен успешно.");
-        }
-        catch (RuTrackerException ex)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, new MessageDto(ex.Message));
-        }
-    }
+    public async Task<ActionResult<DiagnosticReport>> TestRuTracker(CancellationToken cancellationToken)
+        => await _client.DiagnoseAsync(cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Checks the qBittorrent connection step by step.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <response code="200">Check performed; see <see cref="DiagnosticReport.Success"/>.</response>
+    /// <returns>The step-by-step report.</returns>
+    [HttpPost("TestQBittorrent")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<DiagnosticReport>> TestQBittorrent(CancellationToken cancellationToken)
+        => await _qbittorrent.DiagnoseAsync(cancellationToken).ConfigureAwait(false);
 }

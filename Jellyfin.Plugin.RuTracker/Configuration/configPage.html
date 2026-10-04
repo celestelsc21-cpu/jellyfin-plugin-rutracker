@@ -17,6 +17,11 @@
                         <div class="fieldDescription">Только https://rutracker.org, .net или .nl.</div>
                     </div>
                     <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerMirrorUrl">Альтернативный адрес</label>
+                        <input id="RuTrackerMirrorUrl" type="url" is="emby-input" placeholder="https://rutracker.net" />
+                        <div class="fieldDescription">Используется автоматически, если основной адрес недоступен. Пусто — без запасного адреса.</div>
+                    </div>
+                    <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused" for="RuTrackerUsername">Логин</label>
                         <input id="RuTrackerUsername" type="text" is="emby-input" autocomplete="off" />
                     </div>
@@ -29,8 +34,8 @@
                         <input id="RuTrackerSessionCookie" type="password" is="emby-input" autocomplete="off" />
                         <div class="fieldDescription">Если вход блокируется капчей: войдите в браузере и вставьте значение cookie bb_session.</div>
                     </div>
-                    <button is="emby-button" type="button" id="TestRuTrackerButton" class="raised emby-button"><span>Проверить вход на RuTracker</span></button>
-                    <div class="fieldDescription">Проверяются сохранённые настройки — сначала нажмите «Сохранить».</div>
+                    <button is="emby-button" type="button" id="TestRuTrackerButton" class="raised emby-button"><span>Проверить подключение</span></button>
+                    <div class="fieldDescription">Настройки сохраняются, затем проверяются оба адреса: доступность сайта, вход и сессия.</div>
                     <div id="TestRuTrackerResult" style="margin:.5em 0 1em"></div>
 
                     <h2 class="sectionTitle">qBittorrent</h2>
@@ -51,6 +56,9 @@
                         <input id="QBittorrentCategory" type="text" is="emby-input" pattern="[A-Za-z0-9_\-]{1,64}" />
                         <div class="fieldDescription">Метка, по которой плагин отличает свои раздачи.</div>
                     </div>
+                    <button is="emby-button" type="button" id="TestQBittorrentButton" class="raised emby-button"><span>Проверить подключение</span></button>
+                    <div class="fieldDescription">Настройки сохраняются, затем проверяются Web UI, вход, версия и папка по умолчанию.</div>
+                    <div id="TestQBittorrentResult" style="margin:.5em 0 1em"></div>
 
                     <h2 class="sectionTitle">Соответствие путей</h2>
                     <div class="fieldDescription">Одна и та же папка: как её видит контейнер Jellyfin и как её видит qBittorrent на Windows. Например: /data/video ↔ C:\video.</div>
@@ -101,7 +109,7 @@
                 var pluginId = '6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93';
                 var page = document.querySelector('#RuTrackerConfigPage');
                 var kinds = [['Movie', 'Фильм'], ['Series', 'Сериал'], ['Show', 'Передача']];
-                var textFields = ['RuTrackerBaseUrl', 'RuTrackerUsername', 'RuTrackerPassword', 'RuTrackerSessionCookie',
+                var textFields = ['RuTrackerBaseUrl', 'RuTrackerMirrorUrl', 'RuTrackerUsername', 'RuTrackerPassword', 'RuTrackerSessionCookie',
                     'QBittorrentUrl', 'QBittorrentUsername', 'QBittorrentPassword', 'QBittorrentCategory', 'StagingJellyfinPath'];
 
                 // Jellyfin serializes Guids without dashes; compare normalized values.
@@ -208,10 +216,8 @@
                         .map(function (cb) { return cb.dataset.userId; });
                 }
 
-                function save(e) {
-                    e.preventDefault();
-                    Dashboard.showLoadingMsg();
-                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                function saveConfig() {
+                    return ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                         textFields.forEach(function (f) { config[f] = page.querySelector('#' + f).value.trim(); });
                         config.Placement = page.querySelector('#Placement').value;
                         config.UpdateCheckIntervalHours = parseInt(page.querySelector('#UpdateCheckIntervalHours').value, 10) || 12;
@@ -230,7 +236,13 @@
                         config.SearchUserIds = collectChecked('roleSearch');
                         config.DownloadUserIds = collectChecked('roleDownload');
                         return ApiClient.updatePluginConfiguration(pluginId, config);
-                    }).then(function (result) {
+                    });
+                }
+
+                function save(e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    saveConfig().then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                         validate();
                     }).catch(function () {
@@ -261,26 +273,49 @@
                     }).catch(function () { box.textContent = 'Не удалось выполнить проверку.'; });
                 }
 
-                function testRuTracker() {
-                    var box = page.querySelector('#TestRuTrackerResult');
-                    function show(text, isError) {
-                        box.textContent = text;
-                        box.style.color = isError ? '#e57373' : '#81c784';
-                    }
-                    show('Проверяю…', false);
-                    ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('RuTracker/Admin/TestRuTracker'), dataType: 'json' })
-                        .then(function (r) { show((r && r.Message) || 'Вход выполнен.', false); }, function (err) {
-                            if (err && typeof err.json === 'function') {
-                                err.json().then(function (b) { show((b && b.Message) || 'Ошибка проверки.', true); },
-                                    function () { show('Ошибка проверки.', true); });
-                            } else {
-                                show('Не удалось выполнить проверку.', true);
-                            }
-                        });
+                function renderReport(box, report) {
+                    box.textContent = '';
+                    var summary = el('p', { textContent: report.Success ? 'Подключение работает.' : 'Подключение не работает — подробности ниже.' });
+                    summary.style.color = report.Success ? '#81c784' : '#e57373';
+                    summary.style.fontWeight = '600';
+                    box.appendChild(summary);
+                    var ul = el('ul', {}, (report.Steps || []).map(function (step) {
+                        var li = el('li', {});
+                        var mark = el('span', { textContent: step.Ok ? '✓ ' : '✗ ' });
+                        mark.style.color = step.Ok ? '#81c784' : '#e57373';
+                        li.appendChild(mark);
+                        li.appendChild(el('strong', { textContent: step.Name + ': ' }));
+                        li.appendChild(el('span', { textContent: step.Detail }));
+                        return li;
+                    }));
+                    ul.style.margin = '.3em 0';
+                    box.appendChild(ul);
+                }
+
+                function runCheck(endpoint, boxId, button) {
+                    var box = page.querySelector(boxId);
+                    box.style.color = '';
+                    box.textContent = 'Сохраняю настройки и проверяю… Это может занять до минуты.';
+                    button.disabled = true;
+                    saveConfig().then(function () {
+                        return ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl(endpoint), dataType: 'json' });
+                    }).then(function (report) {
+                        renderReport(box, report || { Success: false, Steps: [] });
+                    }).catch(function () {
+                        box.textContent = 'Не удалось выполнить проверку. Проверьте, что настройки сохраняются без ошибок.';
+                        box.style.color = '#e57373';
+                    }).then(function () {
+                        button.disabled = false;
+                    });
                 }
 
                 page.addEventListener('pageshow', load);
-                page.querySelector('#TestRuTrackerButton').addEventListener('click', testRuTracker);
+                page.querySelector('#TestRuTrackerButton').addEventListener('click', function (e) {
+                    runCheck('RuTracker/Admin/TestRuTracker', '#TestRuTrackerResult', e.currentTarget);
+                });
+                page.querySelector('#TestQBittorrentButton').addEventListener('click', function (e) {
+                    runCheck('RuTracker/Admin/TestQBittorrent', '#TestQBittorrentResult', e.currentTarget);
+                });
                 page.querySelector('#RuTrackerConfigForm').addEventListener('submit', save);
                 page.querySelector('#AddMapping').addEventListener('click', function () { addMappingRow(null); });
                 page.querySelector('#AddTarget').addEventListener('click', function () { addTargetRow(null); });

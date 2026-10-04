@@ -85,7 +85,8 @@ docker restart jellyfin
 | `GET /RuTracker/Access/Me` | любой вошедший | права текущего пользователя |
 | `GET /RuTracker/Search?query=&kind=` | роль «Поиск» | поиск раздач (Movie / Series / Show) |
 | `GET /RuTracker/Admin/Validate` | администратор | проверка настроек и путей |
-| `POST /RuTracker/Admin/TestRuTracker` | администратор | проверка входа на RuTracker |
+| `POST /RuTracker/Admin/TestRuTracker` | администратор | пошаговая проверка RuTracker (оба адреса) |
+| `POST /RuTracker/Admin/TestQBittorrent` | администратор | пошаговая проверка qBittorrent |
 | `GET /RuTracker/Web/`, `/RuTracker/Web/header.js` | без входа | статические файлы страницы и кнопки (без данных) |
 
 ## Благодарности
