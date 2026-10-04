@@ -14,6 +14,7 @@ artifacts:
   - "Jellyfin.Plugin.RuTracker.dll"
   - "AngleSharp.dll"
 changelog: |
+  0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.
   0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection
   check now searches a Cyrillic title; no needless re-login when the session is valid.
   0.2.3.0 - Connection check also tests the search page; password login pauses for
