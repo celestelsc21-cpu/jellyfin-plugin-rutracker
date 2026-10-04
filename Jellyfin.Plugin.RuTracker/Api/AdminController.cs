@@ -3,12 +3,15 @@ using System.Linq;
 using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.RuTracker.Access;
 using Jellyfin.Plugin.RuTracker.Api.Models;
 using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.Diagnostics;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
 using Jellyfin.Plugin.RuTracker.Tracker;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller.Channels;
+using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +30,9 @@ public class AdminController : ControllerBase
     private readonly IPluginConfigurationAccessor _config;
     private readonly IRuTrackerClient _client;
     private readonly IQBittorrentClient _qbittorrent;
+    private readonly IChannelManager _channels;
+    private readonly IUserManager _users;
+    private readonly IAccessService _access;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AdminController"/> class.
@@ -34,8 +40,20 @@ public class AdminController : ControllerBase
     /// <param name="config">Configuration accessor.</param>
     /// <param name="client">RuTracker client.</param>
     /// <param name="qbittorrent">qBittorrent client.</param>
-    public AdminController(IPluginConfigurationAccessor config, IRuTrackerClient client, IQBittorrentClient qbittorrent)
+    /// <param name="channels">Channel manager.</param>
+    /// <param name="users">User manager.</param>
+    /// <param name="access">Access service.</param>
+    public AdminController(
+        IPluginConfigurationAccessor config,
+        IRuTrackerClient client,
+        IQBittorrentClient qbittorrent,
+        IChannelManager channels,
+        IUserManager users,
+        IAccessService access)
     {
+        _channels = channels;
+        _users = users;
+        _access = access;
         _config = config;
         _client = client;
         _qbittorrent = qbittorrent;
@@ -87,4 +105,14 @@ public class AdminController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<DiagnosticReport>> TestQBittorrent(CancellationToken cancellationToken)
         => await _qbittorrent.DiagnoseAsync(cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Checks the "RuTracker" channel and write access to the download folders.
+    /// </summary>
+    /// <returns>Step-by-step report.</returns>
+    /// <response code="200">Report returned.</response>
+    [HttpPost("TestLibrary")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<DiagnosticReport>> TestLibrary()
+        => await LibraryDiagnostics.RunAsync(_config.Current, _channels, _users, _access).ConfigureAwait(false);
 }

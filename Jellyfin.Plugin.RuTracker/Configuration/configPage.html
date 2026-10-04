@@ -93,6 +93,11 @@
                         <div class="fieldDescription">Должна быть видна qBittorrent (через соответствие путей) и лежать вне папок медиатеки. Готовые серии копируются в медиатеку по одной.</div>
                     </div>
 
+                    <h2 class="sectionTitle">Просмотр во время загрузки</h2>
+                    <div class="fieldDescription">Проверяется канал RuTracker (кто из пользователей его видит) и право Jellyfin записывать в папки загрузки.</div>
+                    <button is="emby-button" type="button" id="TestLibraryButton" class="raised emby-button"><span>Проверить канал и папки</span></button>
+                    <div id="TestLibraryResult" style="margin:.5em 0 1em"></div>
+
                     <h2 class="sectionTitle">Доступ</h2>
                     <div class="fieldDescription">Администраторы имеют все права. «Скачивание» включает «Поиск».</div>
                     <table class="detailTable" style="width:100%">
@@ -326,6 +331,9 @@
                 });
                 page.querySelector('#TestQBittorrentButton').addEventListener('click', function (e) {
                     runCheck('RuTracker/Admin/TestQBittorrent', '#TestQBittorrentResult', e.currentTarget);
+                });
+                page.querySelector('#TestLibraryButton').addEventListener('click', function (e) {
+                    runCheck('RuTracker/Admin/TestLibrary', '#TestLibraryResult', e.currentTarget);
                 });
                 page.querySelector('#RuTrackerConfigForm').addEventListener('submit', save);
                 page.querySelector('#AddMapping').addEventListener('click', function () { addMappingRow(null); });

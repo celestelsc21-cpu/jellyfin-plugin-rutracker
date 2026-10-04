@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -27,6 +29,7 @@ internal sealed class LibraryPublisher
 {
     private const string PartSuffix = ".rutracker-part";
 
+    private readonly ConcurrentDictionary<string, byte> _reported = new(StringComparer.Ordinal);
     private readonly ILibraryMonitor _libraryMonitor;
     private readonly ILogger<LibraryPublisher> _logger;
 
@@ -55,7 +58,7 @@ internal sealed class LibraryPublisher
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Could not prepare the download folder; unfinished files may appear in the library");
+            _logger.LogWarning("Could not hide unfinished files ({Reason}); they may appear in the library. Jellyfin needs write access to the download folder", ex.Message);
         }
     }
 
@@ -81,7 +84,7 @@ internal sealed class LibraryPublisher
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _logger.LogWarning(ex, "Could not update the .ignore file of download {Id}", record.Id);
+                Report(record.Id, "ignore", ex);
             }
         }
 
@@ -183,8 +186,30 @@ internal sealed class LibraryPublisher
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Could not copy a finished file of download {Id} to the library", record.Id);
+            Report(record.Id, "copy", ex);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Logs a file system problem once per download (it is retried every few seconds).
+    /// </summary>
+    /// <param name="id">Download id.</param>
+    /// <param name="operation">Failed operation.</param>
+    /// <param name="ex">The error.</param>
+    private void Report(Guid id, string operation, Exception ex)
+    {
+        if (_reported.TryAdd(id.ToString("N", CultureInfo.InvariantCulture) + ":" + operation, 0))
+        {
+            _logger.LogWarning(
+                "Download {Id}: {Operation} failed: {Reason}. Jellyfin needs write access to the download folders (mount them without :ro). Further errors of this kind are logged at debug level",
+                id,
+                operation,
+                ex.Message);
+        }
+        else
+        {
+            _logger.LogDebug("Download {Id}: {Operation} failed again: {Reason}", id, operation, ex.Message);
         }
     }
 }
