@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Jellyfin.Plugin.RuTracker/Jellyfin.Plugin.RuTracker.csproj" />
+  <Project Path="Jellyfin.Plugin.RuTracker.Tests/Jellyfin.Plugin.RuTracker.Tests.csproj" />
+</Solution>

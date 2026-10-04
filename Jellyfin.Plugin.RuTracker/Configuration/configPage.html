@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>RuTracker</title>
+</head>
+<body>
+    <div id="RuTrackerConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="RuTrackerConfigForm">
+
+                    <h2 class="sectionTitle">RuTracker</h2>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerBaseUrl">Адрес сайта</label>
+                        <input id="RuTrackerBaseUrl" type="url" is="emby-input" required />
+                        <div class="fieldDescription">Только https://rutracker.org, .net или .nl.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerUsername">Логин</label>
+                        <input id="RuTrackerUsername" type="text" is="emby-input" autocomplete="off" />
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerPassword">Пароль</label>
+                        <input id="RuTrackerPassword" type="password" is="emby-input" autocomplete="new-password" />
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerSessionCookie">Cookie bb_session (необязательно)</label>
+                        <input id="RuTrackerSessionCookie" type="password" is="emby-input" autocomplete="off" />
+                        <div class="fieldDescription">Если вход блокируется капчей: войдите в браузере и вставьте значение cookie bb_session.</div>
+                    </div>
+
+                    <h2 class="sectionTitle">qBittorrent</h2>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="QBittorrentUrl">Адрес Web UI</label>
+                        <input id="QBittorrentUrl" type="url" is="emby-input" placeholder="http://192.168.1.20:8080" />
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="QBittorrentUsername">Логин</label>
+                        <input id="QBittorrentUsername" type="text" is="emby-input" autocomplete="off" />
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="QBittorrentPassword">Пароль</label>
+                        <input id="QBittorrentPassword" type="password" is="emby-input" autocomplete="new-password" />
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="QBittorrentCategory">Категория</label>
+                        <input id="QBittorrentCategory" type="text" is="emby-input" pattern="[A-Za-z0-9_\-]{1,64}" />
+                        <div class="fieldDescription">Метка, по которой плагин отличает свои раздачи.</div>
+                    </div>
+
+                    <h2 class="sectionTitle">Соответствие путей</h2>
+                    <div class="fieldDescription">Одна и та же папка: как её видит контейнер Jellyfin и как её видит qBittorrent на Windows. Например: /data/video ↔ C:\video.</div>
+                    <div id="MappingsList"></div>
+                    <button is="emby-button" type="button" id="AddMapping" class="raised emby-button"><span>Добавить соответствие</span></button>
+
+                    <h2 class="sectionTitle">Папки загрузки</h2>
+                    <div class="fieldDescription">Указываются в путях Jellyfin; путь для qBittorrent вычисляется по соответствиям выше.</div>
+                    <div id="TargetsList"></div>
+                    <button is="emby-button" type="button" id="AddTarget" class="raised emby-button"><span>Добавить папку</span></button>
+
+                    <div class="selectContainer" style="margin-top:1.5em">
+                        <label class="selectLabel" for="Placement">Размещение файлов</label>
+                        <select is="emby-select" id="Placement" class="emby-select-withcolor emby-select">
+                            <option value="DownloadIntoLibrary">Качать сразу в медиатеку</option>
+                            <option value="CopyAfterComplete">Качать в промежуточную папку и копировать</option>
+                        </select>
+                    </div>
+                    <div class="inputContainer" id="StagingContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="StagingJellyfinPath">Промежуточная папка (путь Jellyfin)</label>
+                        <input id="StagingJellyfinPath" type="text" is="emby-input" placeholder="/data/video/_incoming" />
+                    </div>
+
+                    <h2 class="sectionTitle">Доступ</h2>
+                    <div class="fieldDescription">Администраторы имеют все права. «Скачивание» включает «Поиск».</div>
+                    <table class="detailTable" style="width:100%">
+                        <thead><tr><th style="text-align:left">Пользователь</th><th>Поиск</th><th>Скачивание</th></tr></thead>
+                        <tbody id="UsersTable"></tbody>
+                    </table>
+
+                    <h2 class="sectionTitle">Отслеживание обновлений</h2>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="UpdateCheckIntervalHours">Интервал проверки, часов</label>
+                        <input id="UpdateCheckIntervalHours" type="number" is="emby-input" min="1" max="168" />
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Сохранить</span></button>
+                        <button is="emby-button" type="button" id="ValidateButton" class="raised block emby-button"><span>Проверить настройки</span></button>
+                    </div>
+                    <div id="ValidationResult" style="margin-top:1em"></div>
+                </form>
+            </div>
+        </div>
+        <script type="text/javascript">
+            (function () {
+                'use strict';
+                var pluginId = '6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93';
+                var page = document.querySelector('#RuTrackerConfigPage');
+                var kinds = [['Movie', 'Фильм'], ['Series', 'Сериал'], ['Show', 'Передача']];
+                var textFields = ['RuTrackerBaseUrl', 'RuTrackerUsername', 'RuTrackerPassword', 'RuTrackerSessionCookie',
+                    'QBittorrentUrl', 'QBittorrentUsername', 'QBittorrentPassword', 'QBittorrentCategory', 'StagingJellyfinPath'];
+
+                // Jellyfin serializes Guids without dashes; compare normalized values.
+                function normId(id) { return String(id || '').replace(/-/g, '').toLowerCase(); }
+
+                // crypto.randomUUID needs a secure context (HTTPS); getRandomValues works over plain HTTP too.
+                function newGuid() {
+                    var b = crypto.getRandomValues(new Uint8Array(16));
+                    b[6] = (b[6] & 0x0f) | 0x40;
+                    b[8] = (b[8] & 0x3f) | 0x80;
+                    var h = Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+                    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+                }
+
+                function el(tag, props, children) {
+                    var node = document.createElement(tag);
+                    Object.keys(props || {}).forEach(function (k) {
+                        if (k === 'is') { node.setAttribute('is', props[k]); } else { node[k] = props[k]; }
+                    });
+                    (children || []).forEach(function (c) { node.appendChild(c); });
+                    return node;
+                }
+
+                function textInput(cls, value, placeholder) {
+                    return el('input', { type: 'text', className: 'emby-input ' + cls, value: value || '', placeholder: placeholder || '', is: 'emby-input' });
+                }
+
+                function removeButton(row) {
+                    var btn = el('button', { type: 'button', className: 'raised emby-button', textContent: 'Удалить', is: 'emby-button' });
+                    btn.addEventListener('click', function () { row.remove(); });
+                    return btn;
+                }
+
+                function addMappingRow(m) {
+                    var row = el('div', { className: 'mappingRow' });
+                    row.style.cssText = 'display:flex;gap:.5em;align-items:center;margin:.5em 0;flex-wrap:wrap';
+                    row.appendChild(textInput('mapLocal', m && m.JellyfinPrefix, '/data/video'));
+                    row.appendChild(el('span', { textContent: '↔' }));
+                    row.appendChild(textInput('mapRemote', m && m.QBittorrentPrefix, 'C:\\video'));
+                    row.appendChild(removeButton(row));
+                    page.querySelector('#MappingsList').appendChild(row);
+                }
+
+                function addTargetRow(t) {
+                    var row = el('div', { className: 'targetRow' });
+                    row.dataset.id = (t && t.Id) || newGuid();
+                    row.style.cssText = 'display:flex;gap:.5em;align-items:center;margin:.5em 0;flex-wrap:wrap';
+                    var select = el('select', { className: 'emby-select emby-select-withcolor targetKind', is: 'emby-select' },
+                        kinds.map(function (k) { return el('option', { value: k[0], textContent: k[1] }); }));
+                    select.value = (t && t.Kind) || 'Movie';
+                    row.appendChild(select);
+                    row.appendChild(textInput('targetName', t && t.Name, 'Название'));
+                    row.appendChild(textInput('targetPath', t && t.JellyfinPath, '/data/video/Фильмы'));
+                    var cb = el('input', { type: 'checkbox', className: 'targetDefault', checked: !!(t && t.IsDefault) });
+                    row.appendChild(el('label', {}, [cb, el('span', { textContent: ' по умолчанию' })]));
+                    row.appendChild(removeButton(row));
+                    page.querySelector('#TargetsList').appendChild(row);
+                }
+
+                function renderUsers(users, config) {
+                    var search = (config.SearchUserIds || []).map(normId);
+                    var download = (config.DownloadUserIds || []).map(normId);
+                    var body = page.querySelector('#UsersTable');
+                    body.textContent = '';
+                    users.forEach(function (u) {
+                        var isAdmin = u.Policy && u.Policy.IsAdministrator;
+                        var id = normId(u.Id);
+                        function cell(cls, checked) {
+                            var cb = el('input', { type: 'checkbox', className: cls, checked: isAdmin || checked, disabled: !!isAdmin });
+                            cb.dataset.userId = u.Id;
+                            return el('td', { style: 'text-align:center' }, [cb]);
+                        }
+                        body.appendChild(el('tr', {}, [
+                            el('td', { textContent: u.Name + (isAdmin ? ' (администратор)' : '') }),
+                            cell('roleSearch', search.indexOf(id) >= 0),
+                            cell('roleDownload', download.indexOf(id) >= 0)
+                        ]));
+                    });
+                }
+
+                function toggleStaging() {
+                    page.querySelector('#StagingContainer').style.display =
+                        page.querySelector('#Placement').value === 'CopyAfterComplete' ? '' : 'none';
+                }
+
+                function load() {
+                    Dashboard.showLoadingMsg();
+                    Promise.all([ApiClient.getPluginConfiguration(pluginId), ApiClient.getUsers()]).then(function (r) {
+                        var config = r[0];
+                        textFields.forEach(function (f) { page.querySelector('#' + f).value = config[f] || ''; });
+                        page.querySelector('#Placement').value = config.Placement || 'DownloadIntoLibrary';
+                        page.querySelector('#UpdateCheckIntervalHours').value = config.UpdateCheckIntervalHours || 12;
+                        page.querySelector('#MappingsList').textContent = '';
+                        (config.PathMappings || []).forEach(addMappingRow);
+                        page.querySelector('#TargetsList').textContent = '';
+                        (config.DownloadTargets || []).forEach(addTargetRow);
+                        renderUsers(r[1], config);
+                        toggleStaging();
+                    }).finally(function () { Dashboard.hideLoadingMsg(); });
+                }
+
+                function collectChecked(cls) {
+                    return Array.prototype.filter.call(page.querySelectorAll('.' + cls), function (cb) { return cb.checked && !cb.disabled; })
+                        .map(function (cb) { return cb.dataset.userId; });
+                }
+
+                function save(e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        textFields.forEach(function (f) { config[f] = page.querySelector('#' + f).value.trim(); });
+                        config.Placement = page.querySelector('#Placement').value;
+                        config.UpdateCheckIntervalHours = parseInt(page.querySelector('#UpdateCheckIntervalHours').value, 10) || 12;
+                        config.PathMappings = Array.prototype.map.call(page.querySelectorAll('.mappingRow'), function (row) {
+                            return { JellyfinPrefix: row.querySelector('.mapLocal').value.trim(), QBittorrentPrefix: row.querySelector('.mapRemote').value.trim() };
+                        });
+                        config.DownloadTargets = Array.prototype.map.call(page.querySelectorAll('.targetRow'), function (row) {
+                            return {
+                                Id: row.dataset.id,
+                                Kind: row.querySelector('.targetKind').value,
+                                Name: row.querySelector('.targetName').value.trim(),
+                                JellyfinPath: row.querySelector('.targetPath').value.trim(),
+                                IsDefault: row.querySelector('.targetDefault').checked
+                            };
+                        });
+                        config.SearchUserIds = collectChecked('roleSearch');
+                        config.DownloadUserIds = collectChecked('roleDownload');
+                        return ApiClient.updatePluginConfiguration(pluginId, config);
+                    }).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        validate();
+                    }).catch(function () {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('Не удалось сохранить настройки.');
+                    });
+                    return false;
+                }
+
+                function list(title, items, color) {
+                    if (!items || !items.length) { return null; }
+                    var ul = el('ul', {}, items.map(function (t) { return el('li', { textContent: t }); }));
+                    ul.style.color = color;
+                    return el('div', {}, [el('h3', { textContent: title }), ul]);
+                }
+
+                function validate() {
+                    var box = page.querySelector('#ValidationResult');
+                    box.textContent = 'Проверка…';
+                    ApiClient.getJSON(ApiClient.getUrl('RuTracker/Admin/Validate')).then(function (report) {
+                        box.textContent = '';
+                        box.appendChild(el('p', { textContent: report.IsValid ? 'Ошибок нет.' : 'Есть ошибки — загрузки будут недоступны.' }));
+                        [list('Ошибки', report.Errors, '#e57373'), list('Предупреждения', report.Warnings, '#ffb74d'),
+                            list('Папки → qBittorrent', (report.Folders || []).map(function (f) {
+                                return f.Kind + ' «' + f.Name + '»: ' + f.JellyfinPath + ' → ' + (f.QBittorrentPath || 'НЕТ СООТВЕТСТВИЯ');
+                            }), 'inherit')]
+                            .forEach(function (n) { if (n) { box.appendChild(n); } });
+                    }).catch(function () { box.textContent = 'Не удалось выполнить проверку.'; });
+                }
+
+                page.addEventListener('pageshow', load);
+                page.querySelector('#RuTrackerConfigForm').addEventListener('submit', save);
+                page.querySelector('#AddMapping').addEventListener('click', function () { addMappingRow(null); });
+                page.querySelector('#AddTarget').addEventListener('click', function () { addTargetRow(null); });
+                page.querySelector('#Placement').addEventListener('change', toggleStaging);
+                page.querySelector('#ValidateButton').addEventListener('click', validate);
+            })();
+        </script>
+    </div>
+</body>
+</html>

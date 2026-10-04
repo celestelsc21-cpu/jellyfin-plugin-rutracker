@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- Test naming (Method_State_Expected) conflicts with these style rules. -->
+    <NoWarn>$(NoWarn);CA1707;SA1600;CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Tests need the server assemblies at runtime, unlike the plugin itself. -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.11" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Jellyfin.Plugin.RuTracker/Jellyfin.Plugin.RuTracker.csproj" />
+  </ItemGroup>
+
+</Project>

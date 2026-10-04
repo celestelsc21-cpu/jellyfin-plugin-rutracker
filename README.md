@@ -1,0 +1,73 @@
+# Jellyfin.Plugin.RuTracker
+
+Плагин Jellyfin 10.11.x: поиск на RuTracker, загрузка через qBittorrent (Windows),
+просмотр во время загрузки, отслеживание обновлений.
+
+**Статус: этап 1 из 7** — каркас, конфигурация, соответствие путей, роли доступа.
+
+## Требования
+
+- Jellyfin Server **10.11.x** (собрано против 10.11.11, `targetAbi` 10.11.0.0).
+- .NET SDK 9.0.200+ (нужен для `.slnx`).
+- qBittorrent с включённым Web UI.
+- Папки qBittorrent на Windows доступны контейнеру Jellyfin (SMB → bind-mount).
+
+## Соответствие путей
+
+qBittorrent пишет в `C:\video`, а Jellyfin видит ту же папку как `/data/video`.
+Сделать её видимой в контейнере:
+
+1. На Windows расшарьте `C:\video` (например, как `\\PC\video`).
+2. На хосте смонтируйте шару, например в `/mnt/video`
+   (`//PC/video /mnt/video cifs credentials=...,uid=<uid jellyfin>,iocharset=utf8 0 0` в `/etc/fstab`).
+3. В `docker-compose.yml` Jellyfin добавьте в `volumes:` строку `- /mnt/video:/data/video`.
+4. В настройках плагина задайте соответствие `/data/video ↔ C:\video`.
+5. Добавьте папки загрузки в путях Jellyfin (`/data/video/Фильмы` и т.д.).
+
+Кнопка «Проверить настройки» покажет, видит ли Jellyfin каждую папку и во что
+она превращается для qBittorrent.
+
+## Сборка
+
+```bash
+dotnet build -c Release
+dotnet test
+```
+
+Через jprm (как в официальных репозиториях):
+
+```bash
+pip install jprm
+jprm --verbosity=debug plugin build .
+```
+
+## Установка (Docker)
+
+```bash
+# каталог config смонтирован в контейнер как /config
+mkdir -p /home/jellyfin/config/plugins/RuTracker_0.1.0.0
+cp Jellyfin.Plugin.RuTracker/bin/Release/net9.0/Jellyfin.Plugin.RuTracker.dll \
+   /home/jellyfin/config/plugins/RuTracker_0.1.0.0/
+docker restart jellyfin
+```
+
+Логи: `docker logs jellyfin 2>&1 | grep -i rutracker` или файлы в
+`/home/jellyfin/config/log/`.
+
+## Роли
+
+| Роль | Права |
+|---|---|
+| Администратор | всё, включая настройки |
+| Скачивание | поиск + запуск загрузок + подписки |
+| Поиск | поиск и список раздач |
+| Остальные | ничего |
+
+По умолчанию списки пусты, то есть доступ есть только у администраторов.
+
+## API (этап 1)
+
+| Метод | Доступ | Назначение |
+|---|---|---|
+| `GET /RuTracker/Access/Me` | любой вошедший | права текущего пользователя |
+| `GET /RuTracker/Admin/Validate` | администратор | проверка настроек и путей |

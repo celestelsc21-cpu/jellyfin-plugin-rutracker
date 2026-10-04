@@ -1,0 +1,92 @@
+# Builds and tests the plugin on every push to main. When build.yaml carries a
+# version that has no GitHub release yet, publishes the release zip and updates
+# the Jellyfin repository manifest on the "manifest" branch.
+name: Build & publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Build plugin
+        run: dotnet publish Jellyfin.Plugin.RuTracker/Jellyfin.Plugin.RuTracker.csproj -c Release -o out
+
+      - name: Read plugin metadata
+        id: meta
+        run: |
+          echo "version=$(grep -oP '^version:\s*"\K[^"]+' build.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already released
+        id: check
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.meta.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package
+        if: github.event_name != 'pull_request' && steps.check.outputs.exists == 'false'
+        run: |
+          # Ship exactly the artifacts listed in build.yaml (like jprm does),
+          # never server assemblies or their transitive dependencies.
+          mkdir -p pkg
+          for f in $(grep -oP '^\s*-\s*"\K[^"]+\.dll' build.yaml); do
+            cp "out/$f" pkg/
+          done
+          (cd pkg && zip -q "../rutracker_${{ steps.meta.outputs.version }}.zip" *.dll)
+
+      - name: Create release
+        if: github.event_name != 'pull_request' && steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.meta.outputs.version }}" \
+            "rutracker_${{ steps.meta.outputs.version }}.zip" \
+            --title "v${{ steps.meta.outputs.version }}" \
+            --notes "Automated build for Jellyfin 10.11."
+
+      - name: Update repository manifest
+        if: github.event_name != 'pull_request' && steps.check.outputs.exists == 'false'
+        run: |
+          pip install --quiet pyyaml
+          git fetch origin manifest || true
+          if git rev-parse --verify origin/manifest >/dev/null 2>&1; then
+            git show origin/manifest:manifest.json > manifest.json
+          fi
+          python3 scripts/update_manifest.py \
+            --build-yaml build.yaml \
+            --manifest manifest.json \
+            --zip "rutracker_${{ steps.meta.outputs.version }}.zip" \
+            --url "https://github.com/${{ github.repository }}/releases/download/v${{ steps.meta.outputs.version }}/rutracker_${{ steps.meta.outputs.version }}.zip"
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          tmp=$(mktemp -d)
+          cp manifest.json "$tmp/"
+          git checkout --orphan manifest-tmp
+          git rm -rf --quiet .
+          cp "$tmp/manifest.json" .
+          git add manifest.json
+          git commit --quiet -m "Update manifest for v${{ steps.meta.outputs.version }}"
+          git push --force origin manifest-tmp:manifest
