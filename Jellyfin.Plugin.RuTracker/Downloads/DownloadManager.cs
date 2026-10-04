@@ -143,7 +143,14 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             Started = torrent.Meta is null
         };
 
-        await _store.UpdateAsync(list => { list.Add(record); return true; }, save: true, cancellationToken).ConfigureAwait(false);
+        await _store.UpdateAsync(
+            list =>
+            {
+                list.Add(record);
+                return true;
+            },
+            save: true,
+            cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Download {Id} started for topic {TopicId} by user {UserId}", record.Id, record.TopicId, userId);
 
         // Apply priorities and start immediately instead of waiting for the next monitor pass.
