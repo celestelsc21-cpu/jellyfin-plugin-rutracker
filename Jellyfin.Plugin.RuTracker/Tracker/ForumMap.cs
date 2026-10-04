@@ -203,7 +203,7 @@ internal static class ForumMap
         [1327] = MediaKind.Show, // [Док] История: Новое и Новейшее время
         [1332] = MediaKind.Show, // Юмористические аудиопередачи
         [1336] = MediaKind.Show, // Биатлон.Лыжные гонки.Прыжки с трамп.Двоеборье.Горные лыжи.Сноуборд..
-        [1339] = MediaKind.Show, // Фигурное катание 
+        [1339] = MediaKind.Show, // Фигурное катание
         [1343] = MediaKind.Show, // Обзорные и аналитические передачи 2018-2025
         [1359] = MediaKind.Series, // Веб-сериалы, Вебизоды к сериалам и Пилотные серии сериалов
         [1389] = MediaKind.Series, // Аниме (SD Video)
@@ -211,7 +211,7 @@ internal static class ForumMap
         [1391] = MediaKind.Series, // Аниме (плеерный подраздел)
         [1408] = MediaKind.Series, // Женская версия
         [1417] = MediaKind.Series, // Во все тяжкие / Breaking Bad
-        [1434] = MediaKind.Show, // Конькобежный спорт. Шорт-трек. Бобслей. Санный спорт. Скелетон 
+        [1434] = MediaKind.Show, // Конькобежный спорт. Шорт-трек. Бобслей. Санный спорт. Скелетон
         [1442] = MediaKind.Show, // Еврокубки 2024-2025
         [1453] = MediaKind.Show, // [Видео Религия] Культы и новые религиозные движения
         [1457] = MediaKind.Movie, // Зарубежное кино (UHD Video)
@@ -222,7 +222,7 @@ internal static class ForumMap
         [1468] = MediaKind.Show, // [Док] Эпоха СССР
         [1469] = MediaKind.Show, // [Док] Архитектура и строительство
         [1470] = MediaKind.Show, // Гимнастика/Соревнования по танцам
-        [1472] = MediaKind.Show, // Фигурное катание 
+        [1472] = MediaKind.Show, // Фигурное катание
         [1475] = MediaKind.Show, // [Видео Религия] Христианство
         [1481] = MediaKind.Show, // [Видео Юмор] Детские телешоу
         [1482] = MediaKind.Show, // [Видео Юмор] Ледовые шоу
