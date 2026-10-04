@@ -130,15 +130,17 @@ internal static partial class EpisodePlanner
 
     private static IEnumerable<TorrentFileEntry> Companions(IReadOnlyList<TorrentFileEntry> files, TorrentFileEntry episode)
     {
-        var stem = Path.GetFileNameWithoutExtension(episode.Path);
-        if (stem.Length < 3)
+        // "Show.S01E02.mkv" -> "Show.S01E02.rus.mka", "Show.S01E02.srt" (possibly in another folder).
+        // The trailing dot keeps "e1" from matching "e10.srt".
+        var prefix = Path.GetFileNameWithoutExtension(episode.Path) + ".";
+        if (prefix.Length < 2)
         {
             return [];
         }
 
         return files.Where(f => f.Index != episode.Index
             && !IsVideo(f.Path)
-            && Path.GetFileName(f.Path).StartsWith(stem, StringComparison.OrdinalIgnoreCase));
+            && Path.GetFileName(f.Path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     [GeneratedRegex(@"[Ss](\d{1,2})[ ._-]?[EeЕе](\d{1,3})")]

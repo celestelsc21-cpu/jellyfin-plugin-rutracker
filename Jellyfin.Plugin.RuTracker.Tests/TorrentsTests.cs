@@ -13,7 +13,7 @@ public class TorrentsTests
 {
     // Multi-file torrent: "e10.mkv" is listed before "e2.mkv" on purpose, plus a subtitle file for e2.
     private const string MultiFileTorrent =
-        "d8:announce12:http://x/ann4:infod5:filesld6:lengthi100e4:pathl8:e10.mkveed6:lengthi200e4:pathl7:e2.mkveed6:lengthi5e4:pathl7:e2.srteee4:name4:Show12:piece lengthi16384e6:pieces0:ee";
+        "d8:announce12:http://x/ann4:infod5:filesld6:lengthi100e4:pathl7:e10.mkveed6:lengthi200e4:pathl6:e2.mkveed6:lengthi5e4:pathl6:e2.srteee4:name4:Show12:piece lengthi16384e6:pieces0:ee";
 
     [Fact]
     public void TorrentMeta_ParsesFilesAndInfoHash()
@@ -21,7 +21,7 @@ public class TorrentsTests
         var meta = TorrentMeta.TryParse(Encoding.ASCII.GetBytes(MultiFileTorrent));
 
         Assert.NotNull(meta);
-        Assert.Equal("e68341c619dac250ea7899fc9db38703beba666c", meta!.InfoHash); // SHA-1 of the info dictionary
+        Assert.Equal("ce43fc9aafd541e4712e8a4d3896330625029eed", meta!.InfoHash); // SHA-1 of the info dictionary
         Assert.Equal("Show", meta.Name);
         Assert.Equal(new[] { "e10.mkv", "e2.mkv", "e2.srt" }, meta.Files.Select(f => f.Path));
         Assert.Equal(new long[] { 100, 200, 5 }, meta.Files.Select(f => f.Length));
@@ -100,6 +100,18 @@ public class TorrentsTests
         Assert.Equal(EpisodePlanner.PriorityMaximal, priorities[4]); // subtitles of e2
         Assert.Equal(EpisodePlanner.PriorityNormal, priorities[5]); // other files still download
         Assert.DoesNotContain(0, priorities.Values);
+    }
+
+    [Fact]
+    public void Planner_Companions_DoNotMatchLongerEpisodeNames()
+    {
+        var files = Files("e1.mkv", "e10.mkv", "e10.srt");
+
+        var priorities = EpisodePlanner.Priorities(files, EpisodePlanner.BuildOrder(files, null), _ => false);
+
+        Assert.Equal(EpisodePlanner.PriorityMaximal, priorities[0]); // e1
+        Assert.Equal(EpisodePlanner.PriorityHigh, priorities[1]); // e10
+        Assert.Equal(EpisodePlanner.PriorityHigh, priorities[2]); // e10.srt follows e10, not e1
     }
 
     [Fact]
