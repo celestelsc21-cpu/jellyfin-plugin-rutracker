@@ -57,6 +57,18 @@ internal static class RuTrackerUrls
     }
 
     /// <summary>
+    /// Builds the relative search URL. RuTracker expects the query string in UTF-8
+    /// (pages themselves are windows-1251); results are ordered by seeders, descending.
+    /// </summary>
+    /// <param name="normalizedQuery">Query after <see cref="SearchQuery.Normalize"/>.</param>
+    /// <returns>Relative URL of <c>tracker.php</c>.</returns>
+    public static string SearchPath(string normalizedQuery)
+    {
+        ArgumentNullException.ThrowIfNull(normalizedQuery);
+        return "forum/tracker.php?nm=" + Uri.EscapeDataString(normalizedQuery) + "&o=10&s=2";
+    }
+
+    /// <summary>
     /// Checks that a redirect target stays on an allowed RuTracker host over https.
     /// </summary>
     /// <param name="target">Absolute redirect target.</param>

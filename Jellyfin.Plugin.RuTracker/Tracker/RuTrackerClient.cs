@@ -84,9 +84,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             return cached;
         }
 
-        // o=10: order by seeders, s=2: descending. RuTracker expects windows-1251 in the query string.
-        var path = "forum/tracker.php?nm=" + HttpUtility.UrlEncode(normalized, Cp1251) + "&o=10&s=2";
-        var html = await GetAuthenticatedPageAsync(path, cancellationToken).ConfigureAwait(false);
+        var html = await GetAuthenticatedPageAsync(RuTrackerUrls.SearchPath(normalized), cancellationToken).ConfigureAwait(false);
         var results = TrackerHtmlParser.ParseSearchResults(html);
 
         _logger.LogDebug("RuTracker search returned {Count} rows", results.Count);
@@ -224,6 +222,25 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             return html;
         }
 
+        // The page did not show a logged-in user. If the session still works on the
+        // index page, the problem is this particular request, not the login: report
+        // what RuTracker answered instead of logging in again.
+        var index = await GetPageAsync(baseUri, IndexPage, session, cancellationToken).ConfigureAwait(false);
+        if (TrackerHtmlParser.IsLoggedIn(index))
+        {
+            var title = TrackerHtmlParser.ExtractTitle(html);
+            var text = TrackerHtmlParser.ExtractVisibleText(html, 160);
+            _logger.LogWarning(
+                "RuTracker page {Page} on {Host} opened as guest while the session is valid (title {Title})",
+                relative.Split('?', 2)[0],
+                host,
+                title);
+            throw new RuTrackerException(
+                "RuTracker не выдал результаты"
+                + (title.Length > 0 ? ": «" + title + "»" : string.Empty)
+                + (text.Length > 0 ? " — " + text : string.Empty));
+        }
+
         // Session expired or the pasted cookie is stale: log in once more.
         _logger.LogInformation(
             "RuTracker page {Page} on {Host} opened as guest (title {Title}), logging in again",
@@ -325,7 +342,8 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         }
 
         // 5. The search page itself (it may behave differently from the index page).
-        var search = await GetPageAsync(baseUri, "forum/tracker.php?nm=" + HttpUtility.UrlEncode("test", Cp1251) + "&o=10&s=2", session, cancellationToken)
+        // A Cyrillic query exercises the query-string encoding as well.
+        var search = await GetPageAsync(baseUri, RuTrackerUrls.SearchPath("Матрица"), session, cancellationToken)
             .ConfigureAwait(false);
         if (!TrackerHtmlParser.IsLoggedIn(search))
         {
@@ -341,7 +359,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         steps.Add(new DiagnosticStep(
             $"{host}: страница поиска",
             true,
-            "Поиск работает: на тестовый запрос найдено раздач — " + found.ToString(CultureInfo.InvariantCulture) + "."));
+            "Поиск работает: по тестовому запросу «Матрица» найдено раздач — " + found.ToString(CultureInfo.InvariantCulture) + "."));
 
         _sessions[host] = session;
         return true;

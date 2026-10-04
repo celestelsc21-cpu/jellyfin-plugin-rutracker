@@ -167,4 +167,14 @@ public class ConnectionChecksTests
         Assert.Equal("Доступ запрещён для вашего IP", TrackerHtmlParser.ExtractVisibleText(Page, 100));
         Assert.Equal("Доступ…", TrackerHtmlParser.ExtractVisibleText(Page, 6));
     }
+
+    [Fact]
+    public void SearchPath_EncodesQueryAsUtf8()
+    {
+        // "Дь" in UTF-8 is D0 94 D1 8C; in windows-1251 it would be C4 FC.
+        Assert.Equal(
+            "forum/tracker.php?nm=%D0%94%D1%8C%D1%8F%D0%B2%D0%BE%D0%BB%20%D0%BD%D0%BE%D1%81%D0%B8%D1%82&o=10&s=2",
+            RuTrackerUrls.SearchPath("Дьявол носит"));
+        Assert.Equal("forum/tracker.php?nm=test%201&o=10&s=2", RuTrackerUrls.SearchPath("test 1"));
+    }
 }
