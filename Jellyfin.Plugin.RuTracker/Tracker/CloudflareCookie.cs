@@ -27,7 +27,7 @@ internal static class CloudflareCookie
         }
 
         value = value.Split(';', 2)[0].Trim();
-        if (value.Length is < 8 or > 4096 || value.IndexOf('\r') >= 0 || value.IndexOf('\n') >= 0)
+        if (value.Length is < 8 or > 4096 || value.Contains('\r', StringComparison.Ordinal) || value.Contains('\n', StringComparison.Ordinal))
         {
             return null;
         }
