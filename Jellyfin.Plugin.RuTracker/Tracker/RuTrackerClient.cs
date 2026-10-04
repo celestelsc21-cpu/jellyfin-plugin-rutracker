@@ -315,26 +315,65 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
                 : "Cookie bb_session устарела, а логин и пароль RuTracker не заданы. Обновите cookie в настройках плагина.");
         }
 
-        var body = "login_username=" + HttpUtility.UrlEncode(config.RuTrackerUsername, Cp1251)
-            + "&login_password=" + HttpUtility.UrlEncode(config.RuTrackerPassword, Cp1251)
-            + "&login=" + HttpUtility.UrlEncode("вход", Cp1251);
-        var uri = new Uri(baseUri, "forum/login.php");
+        var loginUri = new Uri(baseUri, "forum/login.php");
+
+        // 1. Open the login page first, like a browser: it sets service cookies
+        //    and may carry hidden form fields or a captcha.
+        Dictionary<string, string> cookies;
+        IReadOnlyList<KeyValuePair<string, string>> hiddenFields;
+        using (var page = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, loginUri), cancellationToken).ConfigureAwait(false))
+        {
+            cookies = page.Headers.TryGetValues("Set-Cookie", out var pageCookies)
+                ? CookieJar.Collect(pageCookies)
+                : new Dictionary<string, string>(StringComparer.Ordinal);
+            var html = Cp1251.GetString(await page.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+            if (!TrackerHtmlParser.LooksLikeRuTracker(html))
+            {
+                throw BlockPage(baseUri, html);
+            }
+
+            if (TrackerHtmlParser.HasCaptcha(html))
+            {
+                throw CaptchaRequired(baseUri);
+            }
+
+            hiddenFields = TrackerHtmlParser.ExtractLoginHiddenFields(html);
+        }
+
+        // 2. Submit the form with the same cookies, Referer and Origin a browser would send.
+        var body = new StringBuilder();
+        foreach (var field in hiddenFields)
+        {
+            body.Append(HttpUtility.UrlEncode(field.Key, Cp1251)).Append('=').Append(HttpUtility.UrlEncode(field.Value, Cp1251)).Append('&');
+        }
+
+        body.Append("login_username=").Append(HttpUtility.UrlEncode(config.RuTrackerUsername, Cp1251))
+            .Append("&login_password=").Append(HttpUtility.UrlEncode(config.RuTrackerPassword, Cp1251))
+            .Append("&login=").Append(HttpUtility.UrlEncode("вход", Cp1251));
+        var bodyBytes = Encoding.ASCII.GetBytes(body.ToString());
+        var cookieHeader = CookieJar.ToHeader(cookies);
 
         using var response = await SendAsync(
             () =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Post, uri)
+                var request = new HttpRequestMessage(HttpMethod.Post, loginUri)
                 {
-                    Content = new ByteArrayContent(Encoding.ASCII.GetBytes(body))
+                    Content = new ByteArrayContent(bodyBytes)
                 };
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
-                request.Headers.Referrer = uri;
+                request.Headers.Referrer = loginUri;
+                request.Headers.Add("Origin", baseUri.GetLeftPart(UriPartial.Authority));
+                if (cookieHeader is not null)
+                {
+                    request.Headers.Add("Cookie", cookieHeader);
+                }
+
                 return request;
             },
             cancellationToken).ConfigureAwait(false);
 
-        var session = response.Headers.TryGetValues("Set-Cookie", out var cookies)
-            ? SessionCookie.FromSetCookie(cookies)
+        var session = response.Headers.TryGetValues("Set-Cookie", out var responseCookies)
+            ? SessionCookie.FromSetCookie(responseCookies)
             : null;
         if (session is not null)
         {
@@ -342,24 +381,55 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             return session;
         }
 
-        var html = Cp1251.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
-        if (!TrackerHtmlParser.LooksLikeRuTracker(html))
+        // 3. No session: explain why as precisely as possible.
+        var status = (int)response.StatusCode;
+        var responseHtml = Cp1251.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+        if (responseHtml.Length > 0 && !TrackerHtmlParser.LooksLikeRuTracker(responseHtml))
         {
-            throw BlockPage(baseUri, html);
+            throw BlockPage(baseUri, responseHtml);
         }
 
-        if (TrackerHtmlParser.HasCaptcha(html))
+        if (TrackerHtmlParser.HasCaptcha(responseHtml))
         {
-            _logger.LogWarning("RuTracker login on {Host} requires a captcha", baseUri.Host);
+            throw CaptchaRequired(baseUri);
+        }
+
+        var siteError = TrackerHtmlParser.ExtractLoginError(responseHtml);
+        var visible = siteError ?? TrackerHtmlParser.ExtractVisibleText(responseHtml, 160);
+        var statusText = status.ToString(CultureInfo.InvariantCulture);
+        _logger.LogWarning(
+            "RuTracker login on {Host} rejected: status {Status}, cookies sent {CookieCount}, hidden fields {FieldCount}",
+            baseUri.Host,
+            status,
+            cookies.Count,
+            hiddenFields.Count);
+
+        if (siteError is not null)
+        {
+            throw new RuTrackerException("RuTracker отклонил вход: " + siteError);
+        }
+
+        if (status == 403)
+        {
             throw new RuTrackerException(
-                "RuTracker требует ввести капчу. Войдите на сайт в браузере и вставьте значение cookie bb_session в настройках плагина.");
+                "RuTracker запретил вход с адреса сервера (код 403)"
+                + (visible.Length > 0 ? ": «" + visible + "»" : string.Empty)
+                + ". Обычно так бывает после нескольких неудачных попыток: RuTracker временно требует капчу. "
+                + "Войдите на rutracker.org в браузере и вставьте значение cookie bb_session в настройках плагина.");
         }
 
-        var siteError = TrackerHtmlParser.ExtractLoginError(html);
-        _logger.LogWarning("RuTracker login on {Host} rejected, status {Status}", baseUri.Host, (int)response.StatusCode);
-        throw new RuTrackerException(siteError is null
-            ? "RuTracker не выдал сессию (ответ " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture) + "). Проверьте логин и пароль."
-            : $"RuTracker отклонил вход: {siteError}");
+        throw new RuTrackerException(
+            "RuTracker не выдал сессию (код " + statusText + ")"
+            + (visible.Length > 0 ? ": «" + visible + "»" : string.Empty)
+            + ". Проверьте логин и пароль.");
+    }
+
+    private RuTrackerException CaptchaRequired(Uri baseUri)
+    {
+        _logger.LogWarning("RuTracker login on {Host} requires a captcha", baseUri.Host);
+        return new RuTrackerException(
+            "RuTracker требует ввести капчу для входа с адреса сервера. Войдите на " + baseUri.Host
+            + " в браузере и вставьте значение cookie bb_session в настройках плагина.");
     }
 
     private async Task<string> GetPageAsync(Uri baseUri, string relative, string? session, CancellationToken cancellationToken)

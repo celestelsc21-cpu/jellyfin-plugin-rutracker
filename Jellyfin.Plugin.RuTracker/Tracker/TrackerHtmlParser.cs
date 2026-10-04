@@ -31,7 +31,54 @@ internal static partial class TrackerHtmlParser
     /// <param name="html">Page HTML.</param>
     /// <returns><c>true</c> if a captcha is required.</returns>
     public static bool HasCaptcha(string html)
-        => html.Contains("name=\"cap_sid\"", StringComparison.Ordinal);
+        => html.Contains("name=\"cap_sid\"", StringComparison.Ordinal)
+           || html.Contains("name=\"cap_code_", StringComparison.Ordinal)
+           || html.Contains("static.rutracker.cc/captcha", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Collects hidden fields of the login form (for example <c>redirect</c> or a form token)
+    /// so they can be sent back with the credentials, like a browser does.
+    /// Captcha fields are skipped: they cannot be answered automatically.
+    /// </summary>
+    /// <param name="html">Login page HTML.</param>
+    /// <returns>Field name to value.</returns>
+    public static IReadOnlyList<KeyValuePair<string, string>> ExtractLoginHiddenFields(string html)
+    {
+        var parser = new HtmlParser();
+        using var document = parser.ParseDocument(html);
+        var form = document.QuerySelectorAll("form")
+            .FirstOrDefault(f => f.QuerySelector("input[name=login_username]") is not null);
+        if (form is null)
+        {
+            return [];
+        }
+
+        return form.QuerySelectorAll("input[type=hidden]")
+            .Select(i => new KeyValuePair<string, string>(i.GetAttribute("name") ?? string.Empty, i.GetAttribute("value") ?? string.Empty))
+            .Where(f => f.Key.Length > 0
+                && !f.Key.StartsWith("cap_", StringComparison.Ordinal)
+                && f.Key is not "login_username" and not "login_password" and not "login")
+            .ToList();
+    }
+
+    /// <summary>
+    /// Gets a short piece of the visible page text, for diagnostics.
+    /// </summary>
+    /// <param name="html">Page HTML.</param>
+    /// <param name="maxLength">Maximum length.</param>
+    /// <returns>Visible text, shortened.</returns>
+    public static string ExtractVisibleText(string html, int maxLength)
+    {
+        var parser = new HtmlParser();
+        using var document = parser.ParseDocument(html);
+        foreach (var node in document.QuerySelectorAll("script, style, noscript").ToList())
+        {
+            node.Remove();
+        }
+
+        var text = Clean(document.Body?.TextContent);
+        return text.Length > maxLength ? text[..maxLength] + "…" : text;
+    }
 
     /// <summary>
     /// Gets a value indicating whether the page comes from RuTracker at all.

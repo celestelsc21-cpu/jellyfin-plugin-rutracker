@@ -114,4 +114,57 @@ public class ConnectionChecksTests
         Assert.Null(QBittorrentProtocol.ReadSavePath("{}"));
         Assert.Null(QBittorrentProtocol.ReadSavePath("not json"));
     }
+
+    [Fact]
+    public void CookieJar_CollectsAndBuildsHeader()
+    {
+        var cookies = CookieJar.Collect(
+        [
+            "bb_ssl=1; path=/forum/; domain=.rutracker.org",
+            "bb_t=a%3A0%3A%7B%7D; expires=Tue, 01-Jan-2030 00:00:00 GMT",
+            "evil=bad value\r\nX: 1",
+            "old=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT",
+            "noequals"
+        ]);
+
+        Assert.Equal(2, cookies.Count);
+        Assert.Equal("1", cookies["bb_ssl"]);
+        Assert.Equal("bb_ssl=1; bb_t=a%3A0%3A%7B%7D", CookieJar.ToHeader(cookies));
+        Assert.Null(CookieJar.ToHeader(CookieJar.Collect([])));
+    }
+
+    [Fact]
+    public void LoginForm_HiddenFieldsAndCaptcha()
+    {
+        const string Page = """
+            <html><body>rutracker
+            <form action="login.php" method="post">
+              <input type="hidden" name="redirect" value="index.php">
+              <input type="hidden" name="form_token" value="abc123">
+              <input type="hidden" name="cap_sid" value="zzz">
+              <input type="text" name="login_username">
+              <input type="password" name="login_password">
+              <input type="submit" name="login" value="вход">
+            </form>
+            <form action="search.php"><input type="hidden" name="other" value="1"></form>
+            </body></html>
+            """;
+
+        var fields = TrackerHtmlParser.ExtractLoginHiddenFields(Page);
+
+        Assert.Equal(new[] { "redirect", "form_token" }, fields.Select(f => f.Key));
+        Assert.Equal("abc123", fields[1].Value);
+        Assert.True(TrackerHtmlParser.HasCaptcha(Page));
+        Assert.True(TrackerHtmlParser.HasCaptcha("<img src=\"https://static.rutracker.cc/captcha/1/abc.jpg\">"));
+        Assert.Empty(TrackerHtmlParser.ExtractLoginHiddenFields("<html><body>no form</body></html>"));
+    }
+
+    [Fact]
+    public void VisibleText_SkipsScriptsAndShortens()
+    {
+        const string Page = "<html><head><title>t</title></head><body><script>var x=1;</script> Доступ   запрещён <style>p{}</style>для вашего IP</body></html>";
+
+        Assert.Equal("Доступ запрещён для вашего IP", TrackerHtmlParser.ExtractVisibleText(Page, 100));
+        Assert.Equal("Доступ…", TrackerHtmlParser.ExtractVisibleText(Page, 6));
+    }
 }
