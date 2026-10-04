@@ -291,10 +291,10 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         // 2. Session from the pasted cookie, if any.
         string? session = null;
-        var cookie = SessionCookie.Normalize(config.RuTrackerSessionCookie);
+        var cookie = SessionCookie.Normalize(config.RuTrackerSessionCookie);\n        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (cookie is not null)
         {
-            var html = await GetPageAsync(baseUri, IndexPage, cookie, cancellationToken).ConfigureAwait(false);
+            var html = await GetPageAsync(baseUri, IndexPage, cookie, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             if (TrackerHtmlParser.IsLoggedIn(html))
             {
                 session = cookie;
@@ -321,7 +321,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
             try
             {
-                session = await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+                session = await LoginAsync(config, baseUri, cloudflareCookie, cancellationToken).ConfigureAwait(false);
                 steps.Add(new DiagnosticStep($"{host}: вход по логину и паролю", true, "RuTracker принял логин и пароль."));
             }
             catch (RuTrackerException ex)
@@ -331,7 +331,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             }
 
             // 4. The session really works.
-            var html = await GetPageAsync(baseUri, IndexPage, session, cancellationToken).ConfigureAwait(false);
+            var html = await GetPageAsync(baseUri, IndexPage, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             if (!TrackerHtmlParser.IsLoggedIn(html))
             {
                 steps.Add(new DiagnosticStep($"{host}: проверка сессии", false, "После входа страницы открываются как для гостя."));
@@ -343,7 +343,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         // 5. The search page itself (it may behave differently from the index page).
         // A Cyrillic query exercises the query-string encoding as well.
-        var search = await GetPageAsync(baseUri, RuTrackerUrls.SearchPath("Матрица"), session, cancellationToken)
+        var search = await GetPageAsync(baseUri, RuTrackerUrls.SearchPath("Матрица"), session, cloudflareCookie, cancellationToken)
             .ConfigureAwait(false);
         if (!TrackerHtmlParser.IsLoggedIn(search))
         {
@@ -365,7 +365,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         return true;
     }
 
-    private async Task<string> LoginAsync(PluginConfiguration config, Uri baseUri, CancellationToken cancellationToken)
+    private async Task<string> LoginAsync(PluginConfiguration config, Uri baseUri, string? cloudflareCookie, CancellationToken cancellationToken)
     {
         if (!HasCredentials(config))
         {
@@ -388,7 +388,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         //    and may carry hidden form fields or a captcha.
         Dictionary<string, string> cookies;
         IReadOnlyList<KeyValuePair<string, string>> hiddenFields;
-        using (var page = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, loginUri), cancellationToken).ConfigureAwait(false))
+        using (var page = await SendAsync(() => CreateRequest(HttpMethod.Get, loginUri, cloudflareCookie), cancellationToken).ConfigureAwait(false))
         {
             cookies = page.Headers.TryGetValues("Set-Cookie", out var pageCookies)
                 ? CookieJar.Collect(pageCookies)
@@ -423,7 +423,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         using var response = await SendAsync(
             () =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Post, loginUri)
+                var request = CreateRequest(HttpMethod.Post, loginUri, cloudflareCookie)
                 {
                     Content = new ByteArrayContent(bodyBytes)
                 };
@@ -505,7 +505,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             + " в браузере и вставьте значение cookie bb_session в настройках плагина.");
     }
 
-    private async Task<string> GetPageAsync(Uri baseUri, string relative, string? session, CancellationToken cancellationToken)
+    private async Task<string> GetPageAsync(Uri baseUri, string relative, string? session, string? cloudflareCookie, CancellationToken cancellationToken)
     {
         var uri = new Uri(baseUri, relative);
         var redirects = 0;
@@ -515,7 +515,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             using var response = await SendAsync(
                 () =>
                 {
-                    var request = new HttpRequestMessage(HttpMethod.Get, target);
+                    var request = CreateRequest(HttpMethod.Get, target, cloudflareCookie);
                     if (session is not null)
                     {
                         request.Headers.Add("Cookie", SessionCookie.Name + "=" + session);
@@ -564,6 +564,21 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         return new RuTrackerUnavailableException(title.Length > 0
             ? $"Вместо RuTracker пришла другая страница («{title}»). Вероятно, провайдер блокирует {baseUri.Host} для сервера."
             : $"Вместо RuTracker пришла другая страница. Вероятно, провайдер блокирует {baseUri.Host} для сервера.");
+    }
+
+    private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri, string? cloudflareCookie)
+    {
+        var request = new HttpRequestMessage(method, uri);
+        AddCloudflareCookie(request, cloudflareCookie);
+        return request;
+    }
+
+    private static void AddCloudflareCookie(HttpRequestMessage request, string? cloudflareCookie)
+    {
+        if (cloudflareCookie is not null)
+        {
+            request.Headers.Add("Cookie", "cf_clearance=" + cloudflareCookie);
+        }
     }
 
     private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
