@@ -36,6 +36,10 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan SearchCacheTtl = TimeSpan.FromMinutes(10);
 
+    // After RuTracker refuses a password login (captcha, 403) further attempts only
+    // prolong the block, so they are paused for a while.
+    private static readonly TimeSpan LoginBackoff = TimeSpan.FromMinutes(15);
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IPluginConfigurationAccessor _config;
     private readonly IMemoryCache _cache;
@@ -44,6 +48,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
     // Guarded by _gate.
     private readonly Dictionary<string, string> _sessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (DateTimeOffset Until, string Reason)> _loginBlocked = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private string? _settingsKey;
     private string? _preferredHost;
@@ -160,6 +165,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         if (!string.Equals(key, _settingsKey, StringComparison.Ordinal))
         {
             _sessions.Clear();
+            _loginBlocked.Clear();
             _preferredHost = null;
             _settingsKey = key;
         }
@@ -204,11 +210,12 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
     private async Task<string> GetAuthenticatedOnHostAsync(PluginConfiguration config, Uri baseUri, string relative, CancellationToken cancellationToken)
     {
-        if (!_sessions.TryGetValue(baseUri.Host, out var session))
+        var host = baseUri.Host;
+        if (!_sessions.TryGetValue(host, out var session))
         {
             session = SessionCookie.Normalize(config.RuTrackerSessionCookie)
                 ?? await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
-            _sessions[baseUri.Host] = session;
+            _sessions[host] = session;
         }
 
         var html = await GetPageAsync(baseUri, relative, session, cancellationToken).ConfigureAwait(false);
@@ -218,18 +225,33 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         }
 
         // Session expired or the pasted cookie is stale: log in once more.
-        _logger.LogInformation("RuTracker session on {Host} is not valid, logging in", baseUri.Host);
-        _sessions.Remove(baseUri.Host);
-        session = await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
-        _sessions[baseUri.Host] = session;
+        _logger.LogInformation(
+            "RuTracker page {Page} on {Host} opened as guest (title {Title}), logging in again",
+            relative.Split('?', 2)[0],
+            host,
+            TrackerHtmlParser.ExtractTitle(html));
+        _sessions.Remove(host);
+        try
+        {
+            session = await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RuTrackerException ex) when (ex is not RuTrackerUnavailableException && SessionCookie.Normalize(config.RuTrackerSessionCookie) is not null)
+        {
+            throw new RuTrackerException(
+                "RuTracker не узнал сессию из cookie bb_session, а вход по паролю не удался. "
+                + "Обновите cookie в настройках плагина (войдите на сайт в браузере и скопируйте bb_session заново). "
+                + "Подробности: " + ex.Message,
+                ex);
+        }
 
+        _sessions[host] = session;
         html = await GetPageAsync(baseUri, relative, session, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(html))
         {
             return html;
         }
 
-        _sessions.Remove(baseUri.Host);
+        _sessions.Remove(host);
         throw new RuTrackerException("RuTracker выдал сессию, но страницы открываются как для гостя. Нажмите «Проверить подключение» в настройках плагина.");
     }
 
@@ -299,8 +321,27 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
                 return false;
             }
 
-            steps.Add(new DiagnosticStep($"{host}: проверка сессии", true, "Поиск будет работать через этот адрес."));
+            steps.Add(new DiagnosticStep($"{host}: проверка сессии", true, "Сессия действует."));
         }
+
+        // 5. The search page itself (it may behave differently from the index page).
+        var search = await GetPageAsync(baseUri, "forum/tracker.php?nm=" + HttpUtility.UrlEncode("test", Cp1251) + "&o=10&s=2", session, cancellationToken)
+            .ConfigureAwait(false);
+        if (!TrackerHtmlParser.IsLoggedIn(search))
+        {
+            var seen = TrackerHtmlParser.ExtractTitle(search);
+            steps.Add(new DiagnosticStep(
+                $"{host}: страница поиска",
+                false,
+                "Страница поиска открылась как для гостя" + (seen.Length > 0 ? " («" + seen + "»)" : string.Empty) + "."));
+            return false;
+        }
+
+        var found = TrackerHtmlParser.ParseSearchResults(search).Count;
+        steps.Add(new DiagnosticStep(
+            $"{host}: страница поиска",
+            true,
+            "Поиск работает: на тестовый запрос найдено раздач — " + found.ToString(CultureInfo.InvariantCulture) + "."));
 
         _sessions[host] = session;
         return true;
@@ -313,6 +354,14 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             throw new RuTrackerException(string.IsNullOrWhiteSpace(config.RuTrackerSessionCookie)
                 ? "В настройках плагина не задан логин и пароль RuTracker."
                 : "Cookie bb_session устарела, а логин и пароль RuTracker не заданы. Обновите cookie в настройках плагина.");
+        }
+
+        if (_loginBlocked.TryGetValue(baseUri.Host, out var blocked) && blocked.Until > DateTimeOffset.UtcNow)
+        {
+            var minutes = Math.Max(1, (int)Math.Ceiling((blocked.Until - DateTimeOffset.UtcNow).TotalMinutes));
+            throw new RuTrackerException(
+                blocked.Reason + " Плагин не повторяет вход по паролю ещё "
+                + minutes.ToString(CultureInfo.InvariantCulture) + " мин., чтобы не продлевать блокировку.");
         }
 
         var loginUri = new Uri(baseUri, "forum/login.php");
@@ -334,7 +383,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
             if (TrackerHtmlParser.HasCaptcha(html))
             {
-                throw CaptchaRequired(baseUri);
+                throw BlockLogin(baseUri, CaptchaRequired(baseUri));
             }
 
             hiddenFields = TrackerHtmlParser.ExtractLoginHiddenFields(html);
@@ -391,7 +440,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         if (TrackerHtmlParser.HasCaptcha(responseHtml))
         {
-            throw CaptchaRequired(baseUri);
+            throw BlockLogin(baseUri, CaptchaRequired(baseUri));
         }
 
         var siteError = TrackerHtmlParser.ExtractLoginError(responseHtml);
@@ -411,17 +460,23 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         if (status == 403)
         {
-            throw new RuTrackerException(
+            throw BlockLogin(baseUri, new RuTrackerException(
                 "RuTracker запретил вход с адреса сервера (код 403)"
                 + (visible.Length > 0 ? ": «" + visible + "»" : string.Empty)
                 + ". Обычно так бывает после нескольких неудачных попыток: RuTracker временно требует капчу. "
-                + "Войдите на rutracker.org в браузере и вставьте значение cookie bb_session в настройках плагина.");
+                + "Войдите на rutracker.org в браузере и вставьте значение cookie bb_session в настройках плагина."));
         }
 
         throw new RuTrackerException(
             "RuTracker не выдал сессию (код " + statusText + ")"
             + (visible.Length > 0 ? ": «" + visible + "»" : string.Empty)
             + ". Проверьте логин и пароль.");
+    }
+
+    private RuTrackerException BlockLogin(Uri baseUri, RuTrackerException reason)
+    {
+        _loginBlocked[baseUri.Host] = (DateTimeOffset.UtcNow + LoginBackoff, reason.Message);
+        return reason;
     }
 
     private RuTrackerException CaptchaRequired(Uri baseUri)
