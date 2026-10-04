@@ -397,6 +397,12 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
                 ? CookieJar.Collect(pageCookies)
                 : new Dictionary<string, string>(StringComparer.Ordinal);
             var html = Cp1251.GetString(await page.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+            if (TrackerHtmlParser.IsCloudflareChallenge(html))
+            {
+                throw new RuTrackerUnavailableException(
+                    $"{baseUri.Host} требует проверку Cloudflare. Введите cookie cf_clearance из браузера в настройках плагина.");
+            }
+
             if (!TrackerHtmlParser.LooksLikeRuTracker(html))
             {
                 throw BlockPage(baseUri, html);
@@ -426,10 +432,8 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         using var response = await SendAsync(
             () =>
             {
-                var request = CreateRequest(HttpMethod.Post, loginUri, cloudflareCookie)
-                {
-                    Content = new ByteArrayContent(bodyBytes)
-                };
+                var request = CreateRequest(HttpMethod.Post, loginUri, cloudflareCookie);
+                request.Content = new ByteArrayContent(bodyBytes);
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
                 request.Headers.Referrer = loginUri;
                 request.Headers.Add("Origin", baseUri.GetLeftPart(UriPartial.Authority));
@@ -454,6 +458,12 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 3. No session: explain why as precisely as possible.
         var status = (int)response.StatusCode;
         var responseHtml = Cp1251.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+        if (TrackerHtmlParser.IsCloudflareChallenge(responseHtml))
+        {
+            throw new RuTrackerUnavailableException(
+                $"{baseUri.Host} требует проверку Cloudflare. Введите cookie cf_clearance из браузера в настройках плагина.");
+        }
+
         if (responseHtml.Length > 0 && !TrackerHtmlParser.LooksLikeRuTracker(responseHtml))
         {
             throw BlockPage(baseUri, responseHtml);
