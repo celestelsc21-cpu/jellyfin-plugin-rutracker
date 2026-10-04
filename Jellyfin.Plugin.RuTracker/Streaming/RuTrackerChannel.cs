@@ -38,6 +38,7 @@ internal sealed class RuTrackerChannel : IChannel, IRequiresMediaInfoCallback, I
     private readonly IAccessService _access;
     private readonly StreamTokens _tokens;
     private readonly IServerApplicationHost _host;
+    private readonly StreamProbe _probe;
     private readonly ILogger<RuTrackerChannel> _logger;
 
     /// <summary>
@@ -47,18 +48,21 @@ internal sealed class RuTrackerChannel : IChannel, IRequiresMediaInfoCallback, I
     /// <param name="access">Access service.</param>
     /// <param name="tokens">Stream URL signer.</param>
     /// <param name="host">Server host (local API URL).</param>
+    /// <param name="probe">Stream prober.</param>
     /// <param name="logger">Logger.</param>
     public RuTrackerChannel(
         IDownloadManager manager,
         IAccessService access,
         StreamTokens tokens,
         IServerApplicationHost host,
+        StreamProbe probe,
         ILogger<RuTrackerChannel> logger)
     {
         _manager = manager;
         _access = access;
         _tokens = tokens;
         _host = host;
+        _probe = probe;
         _logger = logger;
     }
 
@@ -133,7 +137,9 @@ internal sealed class RuTrackerChannel : IChannel, IRequiresMediaInfoCallback, I
             }
 
             await _manager.EnsureWatchingAsync(downloadId, fileIndex, cancellationToken).ConfigureAwait(false);
-            return [CreateMediaSource(id, downloadId, fileIndex, source)];
+            var mediaSource = CreateMediaSource(id, downloadId, fileIndex, source);
+            await _probe.ApplyAsync(mediaSource, id, cancellationToken).ConfigureAwait(false);
+            return [mediaSource];
         }
         catch (Exception ex) when (ex is QBittorrentException or DownloadException or IOException)
         {

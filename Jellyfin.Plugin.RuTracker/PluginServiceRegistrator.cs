@@ -63,6 +63,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         // Watching while downloading: the "RuTracker" channel and its signed stream links.
         serviceCollection.AddSingleton<StreamTokens>();
+        serviceCollection.AddSingleton<StreamProbe>();
         serviceCollection.AddSingleton<IChannel, RuTrackerChannel>();
 
         // Adds the RuTracker button to the web client header.
