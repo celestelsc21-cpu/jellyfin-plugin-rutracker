@@ -1,6 +1,6 @@
 using System;
 using System.Net;
-using System.Net.Http;
+using System.Net.Http;\nusing System.Linq;
 using Jellyfin.Plugin.RuTracker.Access;
 using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
