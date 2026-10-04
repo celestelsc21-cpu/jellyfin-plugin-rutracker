@@ -569,6 +569,11 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri, string? cloudflareCookie)
     {
         var request = new HttpRequestMessage(method, uri);
+        var userAgent = _config.Current.RuTrackerUserAgent;
+        request.Headers.UserAgent.ParseAdd(
+            string.IsNullOrWhiteSpace(userAgent)
+                ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+                : userAgent);
         AddCloudflareCookie(request, cloudflareCookie);
         return request;
     }
