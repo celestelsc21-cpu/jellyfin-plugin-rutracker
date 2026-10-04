@@ -277,6 +277,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private async Task<bool> DiagnoseHostAsync(PluginConfiguration config, Uri baseUri, List<DiagnosticStep> steps, CancellationToken cancellationToken)
     {
         var host = baseUri.Host;
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
 
         // 1. Reachability: the site answers and it is really RuTracker.
         try
@@ -294,7 +295,6 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 2. Session from the pasted cookie, if any.
         string? session = null;
         var cookie = SessionCookie.Normalize(config.RuTrackerSessionCookie);
-        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (cookie is not null)
         {
             var html = await GetPageAsync(baseUri, IndexPage, cookie, cloudflareCookie, cancellationToken).ConfigureAwait(false);
