@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using Jellyfin.Plugin.RuTracker.Access;
 using Jellyfin.Plugin.RuTracker.Configuration;
+using Jellyfin.Plugin.RuTracker.Downloads;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
 using Jellyfin.Plugin.RuTracker.Tracker;
 using Jellyfin.Plugin.RuTracker.Web;
@@ -50,6 +51,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
                 UseCookies = false
             });
         serviceCollection.AddSingleton<IQBittorrentClient, QBittorrentClient>();
+
+        // Downloads: persistent list, manager and the background priority monitor.
+        serviceCollection.AddSingleton<DownloadStore>();
+        serviceCollection.AddSingleton<IDownloadManager, DownloadManager>();
+        serviceCollection.AddHostedService<DownloadMonitor>();
 
         // Adds the RuTracker button to the web client header.
         serviceCollection.AddTransient<IStartupFilter, WebInjectionStartupFilter>();

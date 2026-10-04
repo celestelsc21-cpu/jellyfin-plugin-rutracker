@@ -21,6 +21,16 @@ public interface IRuTrackerClient
     Task<IReadOnlyList<TorrentInfo>> SearchAsync(string query, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets the .torrent file of a topic (or at least its magnet link) for handing it to qBittorrent.
+    /// Results are cached for a short time.
+    /// </summary>
+    /// <param name="topicId">Topic id.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The topic torrent.</returns>
+    /// <exception cref="RuTrackerException">Neither the file nor a magnet link could be obtained.</exception>
+    Task<TopicTorrent> GetTopicTorrentAsync(long topicId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Checks every configured address step by step: reachability, login, session.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

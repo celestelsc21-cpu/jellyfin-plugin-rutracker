@@ -155,14 +155,109 @@
             .item { grid-template-columns: 1fr; }
             .item .peers { grid-row: auto; grid-column: 1; text-align: left; }
         }
+        .tabs { margin-left: auto; display: flex; gap: 4px; }
+        .tabs button {
+            padding: 6px 14px;
+            color: var(--muted);
+            background: transparent;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+        .tabs .badge-count { margin-left: 6px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; }
+        [hidden] { display: none !important; }
+        button.watch {
+            margin-top: 6px;
+            padding: 5px 12px;
+            color: var(--accent-ink);
+            background: var(--accent);
+            border: 0;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button.secondary {
+            padding: 6px 12px;
+            color: var(--text);
+            background: var(--panel-hover);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        button.danger { color: var(--bad); }
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(0, 0, 0, .65);
+        }
+        .modal .dialog {
+            width: min(560px, 100%);
+            max-height: calc(100vh - 32px);
+            overflow: auto;
+            padding: 20px;
+            background: #1f1f1f;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+        }
+        .modal h2 { margin: 0 0 4px; font-size: 18px; }
+        .modal .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+        .field { display: grid; gap: 6px; margin-bottom: 14px; }
+        .field label { font-size: 13px; color: var(--muted); }
+        .field select {
+            padding: 9px 10px;
+            color: var(--text);
+            background: #2a2a2a;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            font-size: 15px;
+        }
+        .field .hint { font-size: 12px; color: var(--muted); }
+        .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+        .downloads { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+        .download { padding: 14px; background: var(--panel); border-radius: var(--radius); }
+        .download .head { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+        .download .name { font-weight: 600; overflow-wrap: anywhere; }
+        .download .info { margin-top: 6px; color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+        .download .buttons { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .bar { height: 6px; margin-top: 8px; background: #2c2c2c; border-radius: 999px; overflow: hidden; }
+        .bar > span { display: block; height: 100%; background: var(--accent); }
+        .bar.current > span { background: var(--good); }
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            z-index: 20;
+            transform: translateX(-50%);
+            max-width: calc(100vw - 32px);
+            padding: 12px 18px;
+            color: #fff;
+            background: #2e7d32;
+            border-radius: var(--radius);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+        }
+        .toast.error { background: #b71c1c; }
     </style>
 </head>
 <body>
     <header>
         <a class="back" id="backLink" href="#">← Jellyfin</a>
-        <h1>Поиск на RuTracker</h1>
+        <h1>RuTracker</h1>
+        <nav class="tabs" id="tabs" hidden>
+            <button type="button" data-view="search" aria-selected="true">Поиск</button>
+            <button type="button" data-view="downloads" aria-selected="false">Загрузки<span class="badge-count" id="activeCount" hidden></span></button>
+        </nav>
     </header>
     <main>
+        <section id="searchView">
         <form class="search" id="searchForm" autocomplete="off">
             <input type="search" id="query" placeholder="Название фильма, сериала или передачи" minlength="2" maxlength="100" required autofocus>
             <button class="primary" type="submit" id="searchButton">Найти</button>
@@ -188,7 +283,61 @@
         </div>
         <div class="status" id="status" role="status"></div>
         <ul class="results" id="results"></ul>
+        </section>
+        <section id="downloadsView" hidden>
+            <div class="status" id="downloadsStatus" role="status"></div>
+            <ul class="downloads" id="downloads"></ul>
+        </section>
     </main>
+
+    <div class="modal" id="downloadDialog" hidden>
+        <form class="dialog" id="downloadForm" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+            <h2 id="dialogTitle">Загрузить и смотреть</h2>
+            <p class="subtitle" id="dialogTopic"></p>
+            <div class="field">
+                <label for="dialogKind">Тип</label>
+                <select id="dialogKind">
+                    <option value="Movie">Фильм</option>
+                    <option value="Series">Сериал</option>
+                    <option value="Show">Передача</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="dialogTarget">Куда загрузить</label>
+                <select id="dialogTarget"></select>
+                <div class="hint" id="dialogTargetHint"></div>
+            </div>
+            <div class="field" id="startField" hidden>
+                <label for="dialogStart">Начать смотреть с</label>
+                <select id="dialogStart"></select>
+                <div class="hint">Загружается вся раздача: сначала выбранная серия, затем следующие по порядку, в конце — предыдущие.</div>
+            </div>
+            <div class="status" id="dialogStatus"></div>
+            <div class="actions">
+                <button type="button" class="secondary" id="dialogCancel">Отмена</button>
+                <button type="submit" class="primary" id="dialogSubmit">Загрузить</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="modal" id="startDialog" hidden>
+        <form class="dialog" id="startForm" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+            <h2 id="startTitle">Смотреть с другой серии</h2>
+            <p class="subtitle" id="startTopic"></p>
+            <div class="field">
+                <label for="startSelect">Серия</label>
+                <select id="startSelect"></select>
+                <div class="hint">Выбранная серия перейдёт в начало очереди, остальные продолжат загружаться за ней.</div>
+            </div>
+            <div class="status" id="startStatus"></div>
+            <div class="actions">
+                <button type="button" class="secondary" id="startCancel">Отмена</button>
+                <button type="submit" class="primary">Применить</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="toast" id="toast" hidden role="status"></div>
     <script>
         (function () {
             'use strict';
@@ -229,19 +378,27 @@
                 statusEl.classList.toggle('error', !!isError);
             }
 
-            function api(path) {
+            function api(path, options) {
+                options = options || {};
+                var headers = { 'Authorization': 'MediaBrowser Token="' + auth.AccessToken + '"', 'Accept': 'application/json' };
+                if (options.body !== undefined) { headers['Content-Type'] = 'application/json'; }
                 // Only the token is sent: the server fills device info from the existing session.
                 return fetch(root + path, {
-                    headers: { 'Authorization': 'MediaBrowser Token="' + auth.AccessToken + '"', 'Accept': 'application/json' },
+                    method: options.method || 'GET',
+                    headers: headers,
+                    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
                     credentials: 'same-origin'
+                }).catch(function () {
+                    throw new Error('Нет связи с сервером Jellyfin. Проверьте подключение и откройте эту страницу кнопкой RuTracker в Jellyfin.');
                 }).then(function (response) {
+                    if (response.status === 204) { return null; }
                     return response.json().catch(function () { return null; }).then(function (body) {
                         if (response.ok) {
                             return body;
                         }
                         var message = body && body.Message;
                         if (response.status === 401) { message = 'Сессия Jellyfin истекла. Войдите заново.'; }
-                        if (response.status === 403) { message = 'У вас нет доступа к поиску. Обратитесь к администратору.'; }
+                        if (response.status === 403 && !message) { message = 'Недостаточно прав. Обратитесь к администратору.'; }
                         throw new Error(message || ('Ошибка ' + response.status));
                     });
                 });
@@ -382,6 +539,13 @@
                     peers.appendChild(el('span', 'seed', '↑ ' + item.Seeders));
                     peers.appendChild(document.createTextNode('  '));
                     peers.appendChild(el('span', 'leech', '↓ ' + item.Leechers));
+                    if (access.CanDownload) {
+                        peers.appendChild(el('br'));
+                        var watch = el('button', 'watch', 'Смотреть');
+                        watch.type = 'button';
+                        watch.addEventListener('click', function () { openDownloadDialog(item); });
+                        peers.appendChild(watch);
+                    }
                     li.appendChild(peers);
 
                     var meta = el('div', 'meta');
@@ -461,9 +625,257 @@
                 });
             });
 
+            // ---------------- Downloads ----------------
+            var access = { CanSearch: false, CanDownload: false };
+            var targets = [];
+            var dialogItem = null;
+            var pollTimer = null;
+            var toastTimer = null;
+            var STATE_NAMES = { Queued: 'В очереди', Downloading: 'Загружается', Completed: 'Загружено', Removed: 'Удалено из qBittorrent' };
+
+            function toast(text, isError) {
+                var t = document.getElementById('toast');
+                t.textContent = text;
+                t.classList.toggle('error', !!isError);
+                t.hidden = false;
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () { t.hidden = true; }, 6000);
+            }
+
+            function setText(id, text, isError) {
+                var node = document.getElementById(id);
+                node.textContent = text || '';
+                node.classList.toggle('error', !!isError);
+            }
+
+            function option(value, text) {
+                var o = el('option', null, text);
+                o.value = value;
+                return o;
+            }
+
+            function fillTargets(kind) {
+                var select = document.getElementById('dialogTarget');
+                select.textContent = '';
+                var ofKind = targets.filter(function (t) { return t.Kind === kind; });
+                var others = targets.filter(function (t) { return t.Kind !== kind; });
+                ofKind.sort(function (a, b) { return (b.IsDefault ? 1 : 0) - (a.IsDefault ? 1 : 0); });
+                ofKind.concat(others).forEach(function (t) {
+                    select.appendChild(option(t.Id, t.Name + (t.Kind !== kind ? ' (' + KIND_NAMES[t.Kind] + ')' : '') + (t.IsDefault && t.Kind === kind ? ' — по умолчанию' : '')));
+                });
+                setText('dialogTargetHint', targets.length ? '' : 'Администратор ещё не настроил папки загрузки.', !targets.length);
+                document.getElementById('dialogSubmit').disabled = !targets.length;
+            }
+
+            function openDownloadDialog(item) {
+                dialogItem = item;
+                document.getElementById('dialogTopic').textContent = item.Title;
+                document.getElementById('dialogKind').value = item.Kind;
+                fillTargets(item.Kind);
+                var startField = document.getElementById('startField');
+                var startSelect = document.getElementById('dialogStart');
+                startField.hidden = true;
+                startSelect.textContent = '';
+                setText('dialogStatus', 'Получаю список файлов раздачи…');
+                document.getElementById('downloadDialog').hidden = false;
+
+                api('RuTracker/Topics/' + item.TopicId + '/Files').then(function (info) {
+                    if (dialogItem !== item) { return; }
+                    var files = (info && info.Files) || [];
+                    if (files.length > 1) {
+                        files.forEach(function (f, i) { startSelect.appendChild(option(f.Index, (i + 1) + '. ' + f.Label)); });
+                        startField.hidden = false;
+                    }
+                    setText('dialogStatus', files.length ? '' : 'Список файлов станет известен после начала загрузки.');
+                }).catch(function (error) {
+                    if (dialogItem === item) { setText('dialogStatus', error.message, true); }
+                });
+            }
+
+            function closeDialog(id) {
+                document.getElementById(id).hidden = true;
+                if (id === 'downloadDialog') { dialogItem = null; }
+            }
+
+            document.getElementById('dialogKind').addEventListener('change', function (e) { fillTargets(e.target.value); });
+            document.getElementById('dialogCancel').addEventListener('click', function () { closeDialog('downloadDialog'); });
+            document.getElementById('startCancel').addEventListener('click', function () { closeDialog('startDialog'); });
+            document.querySelectorAll('.modal').forEach(function (m) {
+                m.addEventListener('click', function (e) { if (e.target === m) { closeDialog(m.id); } });
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') { closeDialog('downloadDialog'); closeDialog('startDialog'); }
+            });
+
+            document.getElementById('downloadForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (!dialogItem) { return; }
+                var startField = document.getElementById('startField');
+                var body = {
+                    TopicId: dialogItem.TopicId,
+                    Kind: document.getElementById('dialogKind').value,
+                    TargetId: document.getElementById('dialogTarget').value || null,
+                    StartFileIndex: startField.hidden ? null : parseInt(document.getElementById('dialogStart').value, 10)
+                };
+                var submit = document.getElementById('dialogSubmit');
+                submit.disabled = true;
+                setText('dialogStatus', 'Отправляю в qBittorrent…');
+                api('RuTracker/Downloads', { method: 'POST', body: body }).then(function (result) {
+                    closeDialog('downloadDialog');
+                    toast(result.Message);
+                    refreshDownloads();
+                }).catch(function (error) {
+                    setText('dialogStatus', error.message, true);
+                }).then(function () { submit.disabled = false; });
+            });
+
+            function formatEta(seconds) {
+                if (!seconds) { return ''; }
+                var h = Math.floor(seconds / 3600);
+                var m = Math.round((seconds % 3600) / 60);
+                return h > 0 ? h + ' ч ' + m + ' мин' : m + ' мин';
+            }
+
+            function bar(progress, cls) {
+                var outer = el('div', 'bar' + (cls ? ' ' + cls : ''));
+                var inner = el('span');
+                inner.style.width = Math.round((progress || 0) * 100) + '%';
+                outer.appendChild(inner);
+                return outer;
+            }
+
+            function renderDownloads(items) {
+                var list = document.getElementById('downloads');
+                list.textContent = '';
+                var active = items.filter(function (d) { return d.State === 'Queued' || d.State === 'Downloading'; }).length;
+                var badge = document.getElementById('activeCount');
+                badge.textContent = active;
+                badge.hidden = active === 0;
+                setText('downloadsStatus', items.length ? '' : 'Загрузок пока нет. Найдите раздачу на вкладке «Поиск» и нажмите «Смотреть».');
+
+                items.forEach(function (d) {
+                    var li = el('li', 'download');
+                    var head = el('div', 'head');
+                    head.appendChild(el('span', 'name', d.Title));
+                    head.appendChild(el('span', 'badge', KIND_NAMES[d.Kind] || d.Kind));
+                    li.appendChild(head);
+                    li.appendChild(bar(d.Progress));
+
+                    var info = el('div', 'info');
+                    info.appendChild(el('span', null, (STATE_NAMES[d.State] || d.State) + ' — ' + Math.floor((d.Progress || 0) * 100) + '%'));
+                    if (d.State === 'Downloading' && d.SpeedBytes) { info.appendChild(el('span', null, formatSize(d.SpeedBytes) + '/с')); }
+                    if (d.State === 'Downloading' && d.EtaSeconds) { info.appendChild(el('span', null, 'осталось ' + formatEta(d.EtaSeconds))); }
+                    if (d.VideoCount > 1) { info.appendChild(el('span', null, 'серий готово: ' + d.VideosDone + ' из ' + d.VideoCount)); }
+                    info.appendChild(el('span', null, 'папка: ' + d.TargetName));
+                    li.appendChild(info);
+
+                    if (d.CurrentLabel && d.State !== 'Completed') {
+                        var current = el('div', 'info');
+                        current.appendChild(el('span', null, 'Сейчас: ' + d.CurrentLabel + (d.CurrentProgress != null ? ' — ' + Math.floor(d.CurrentProgress * 100) + '%' : '')));
+                        li.appendChild(current);
+                        if (d.CurrentProgress != null) { li.appendChild(bar(d.CurrentProgress, 'current')); }
+                    }
+
+                    var buttons = el('div', 'buttons');
+                    if (d.VideoCount > 1 && (d.State === 'Queued' || d.State === 'Downloading')) {
+                        var change = el('button', 'secondary', 'Смотреть с другой серии');
+                        change.type = 'button';
+                        change.addEventListener('click', function () { openStartDialog(d); });
+                        buttons.appendChild(change);
+                    }
+                    if (d.CanDelete) {
+                        var remove = el('button', 'secondary danger', d.State === 'Completed' ? 'Убрать из списка' : 'Отменить');
+                        remove.type = 'button';
+                        remove.addEventListener('click', function () { removeDownload(d); });
+                        buttons.appendChild(remove);
+                    }
+                    if (buttons.childNodes.length) { li.appendChild(buttons); }
+                    list.appendChild(li);
+                });
+            }
+
+            function refreshDownloads() {
+                if (!access.CanDownload) { return Promise.resolve(); }
+                return api('RuTracker/Downloads').then(function (items) {
+                    renderDownloads(items || []);
+                }).catch(function (error) {
+                    setText('downloadsStatus', error.message, true);
+                });
+            }
+
+            var startDownload = null;
+            function openStartDialog(d) {
+                startDownload = d;
+                var select = document.getElementById('startSelect');
+                select.textContent = '';
+                document.getElementById('startTopic').textContent = d.Title;
+                setText('startStatus', 'Загружаю список серий…');
+                document.getElementById('startDialog').hidden = false;
+                api('RuTracker/Downloads/' + d.Id + '/Files').then(function (files) {
+                    (files || []).forEach(function (f, i) {
+                        var o = option(f.Index, (i + 1) + '. ' + f.Label + (f.Progress >= 1 ? ' ✓' : f.Progress > 0 ? ' — ' + Math.floor(f.Progress * 100) + '%' : ''));
+                        if (f.IsCurrent) { o.selected = true; }
+                        select.appendChild(o);
+                    });
+                    setText('startStatus', '');
+                }).catch(function (error) { setText('startStatus', error.message, true); });
+            }
+
+            document.getElementById('startForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (!startDownload) { return; }
+                var index = parseInt(document.getElementById('startSelect').value, 10);
+                api('RuTracker/Downloads/' + startDownload.Id + '/Start', { method: 'POST', body: { FileIndex: index } }).then(function () {
+                    closeDialog('startDialog');
+                    toast('Выбранная серия загружается первой.');
+                    refreshDownloads();
+                }).catch(function (error) { setText('startStatus', error.message, true); });
+            });
+
+            function removeDownload(d) {
+                var finished = d.State === 'Completed';
+                var question = finished
+                    ? 'Убрать «' + d.Title + '» из списка загрузок? Файлы останутся в медиатеке, раздача — в qBittorrent.'
+                    : 'Отменить загрузку «' + d.Title + '»?';
+                if (!window.confirm(question)) { return; }
+                var deleteFiles = !finished && window.confirm('Удалить уже скачанные файлы? «ОК» — удалить, «Отмена» — оставить.');
+                var path = 'RuTracker/Downloads/' + d.Id + '?deleteFiles=' + (deleteFiles ? 'true' : 'false');
+                api(path, { method: 'DELETE' }).then(function () {
+                    toast(finished ? 'Убрано из списка.' : 'Загрузка отменена.');
+                    refreshDownloads();
+                }).catch(function (error) { toast(error.message, true); });
+            }
+
+            function showView(view) {
+                document.getElementById('searchView').hidden = view !== 'search';
+                document.getElementById('downloadsView').hidden = view !== 'downloads';
+                document.querySelectorAll('#tabs button').forEach(function (b) {
+                    b.setAttribute('aria-selected', b.getAttribute('data-view') === view ? 'true' : 'false');
+                });
+                clearInterval(pollTimer);
+                if (view === 'downloads') {
+                    refreshDownloads();
+                    pollTimer = setInterval(refreshDownloads, 5000);
+                }
+            }
+
+            document.querySelectorAll('#tabs button').forEach(function (b) {
+                b.addEventListener('click', function () { showView(b.getAttribute('data-view')); });
+            });
+
             if (!auth) {
                 setStatus('Сначала войдите в Jellyfin в этом браузере, затем вернитесь на эту страницу.', true);
                 button.disabled = true;
+            } else {
+                api('RuTracker/Access/Me').then(function (info) {
+                    access = info || access;
+                    if (access.CanDownload) {
+                        document.getElementById('tabs').hidden = false;
+                        api('RuTracker/Targets').then(function (list) { targets = list || []; }).catch(function () { targets = []; });
+                        refreshDownloads();
+                        if (state.items.length) { render(); }
+                    }
+                }).catch(function () { /* search still works for users without download rights */ });
             }
         })();
     </script>

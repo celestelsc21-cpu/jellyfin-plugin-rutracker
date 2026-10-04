@@ -137,6 +137,32 @@ internal static partial class TrackerHtmlParser
     }
 
     /// <summary>
+    /// Extracts the magnet link from a topic page.
+    /// </summary>
+    /// <param name="html">Topic page HTML.</param>
+    /// <returns>The magnet URI, or <c>null</c>.</returns>
+    public static string? ExtractMagnet(string html)
+    {
+        var parser = new HtmlParser();
+        using var document = parser.ParseDocument(html);
+        var href = document.QuerySelector("a.magnet-link[href^='magnet:?']")?.GetAttribute("href")
+            ?? document.QuerySelector("a[href^='magnet:?']")?.GetAttribute("href");
+        return string.IsNullOrWhiteSpace(href) ? null : href.Trim();
+    }
+
+    /// <summary>
+    /// Extracts the topic title from a topic page.
+    /// </summary>
+    /// <param name="html">Topic page HTML.</param>
+    /// <returns>The title, or an empty string.</returns>
+    public static string ExtractTopicTitle(string html)
+    {
+        var parser = new HtmlParser();
+        using var document = parser.ParseDocument(html);
+        return Clean(document.QuerySelector("#topic-title, h1.maintitle")?.TextContent);
+    }
+
+    /// <summary>
     /// Parses the result table of <c>tracker.php</c>.
     /// </summary>
     /// <param name="html">Page HTML.</param>

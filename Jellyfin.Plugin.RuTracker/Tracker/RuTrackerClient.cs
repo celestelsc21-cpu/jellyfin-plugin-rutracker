@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Web;
 using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.Diagnostics;
+using Jellyfin.Plugin.RuTracker.Torrents;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -126,6 +127,77 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             }
 
             return new DiagnosticReport(anyOk, steps);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<TopicTorrent> GetTopicTorrentAsync(long topicId, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(topicId);
+        var cacheKey = "rutracker:torrent:" + topicId.ToString(CultureInfo.InvariantCulture);
+        if (_cache.TryGetValue(cacheKey, out TopicTorrent? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        var config = _config.Current;
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
+        var id = topicId.ToString(CultureInfo.InvariantCulture);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ResetIfSettingsChanged(config);
+            var bases = RuTrackerUrls.PreferHost(RuTrackerUrls.GetBaseUris(config), _preferredHost);
+            if (bases.Count == 0)
+            {
+                throw new RuTrackerException("Адрес RuTracker в настройках плагина некорректен.");
+            }
+
+            RuTrackerUnavailableException? lastUnavailable = null;
+            foreach (var baseUri in bases)
+            {
+                try
+                {
+                    // The topic page validates (or renews) the session and carries the magnet link.
+                    var topicHtml = await GetAuthenticatedOnHostAsync(config, baseUri, "forum/viewtopic.php?t=" + id, cancellationToken).ConfigureAwait(false);
+                    var session = _sessions[baseUri.Host];
+                    var bytes = await GetTorrentBytesAsync(baseUri, "forum/dl.php?t=" + id, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
+                    var meta = bytes.Length > 0 ? TorrentMeta.TryParse(bytes) : null;
+                    var magnet = TrackerHtmlParser.ExtractMagnet(topicHtml);
+                    if (meta is null && MagnetLink.GetInfoHash(magnet) is null)
+                    {
+                        throw new RuTrackerException("RuTracker не отдал ни торрент-файл, ни magnet-ссылку для этой раздачи.");
+                    }
+
+                    var title = TrackerHtmlParser.ExtractTopicTitle(topicHtml);
+                    var result = new TopicTorrent(
+                        topicId,
+                        title.Length > 0 ? title : (meta?.Name ?? id),
+                        meta is null ? ReadOnlyMemory<byte>.Empty : bytes,
+                        meta,
+                        magnet);
+
+                    _logger.LogInformation(
+                        "Got torrent for RuTracker topic {TopicId}: file {HasFile}, magnet {HasMagnet}",
+                        topicId,
+                        meta is not null,
+                        magnet is not null);
+                    _preferredHost = baseUri.Host;
+                    _cache.Set(cacheKey, result, SearchCacheTtl);
+                    return result;
+                }
+                catch (RuTrackerUnavailableException ex)
+                {
+                    lastUnavailable = ex;
+                    _logger.LogWarning("RuTracker address {Host} is unavailable: {Reason}", baseUri.Host, ex.Message);
+                }
+            }
+
+            throw lastUnavailable!;
         }
         finally
         {
@@ -568,6 +640,31 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
             return html;
         }
+    }
+
+    private async Task<byte[]> GetTorrentBytesAsync(Uri baseUri, string relative, string session, string? cloudflareCookie, CancellationToken cancellationToken)
+    {
+        // Binary download: never decode through windows-1251 (it would corrupt the file).
+        var uri = new Uri(baseUri, relative);
+        using var response = await SendAsync(
+            () =>
+            {
+                var request = CreateRequest(HttpMethod.Get, uri, cloudflareCookie);
+                request.Headers.Add("Cookie", SessionCookie.Name + "=" + session);
+                request.Headers.Referrer = new Uri(baseUri, "forum/index.php");
+                return request;
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (response.StatusCode != System.Net.HttpStatusCode.OK)
+        {
+            _logger.LogWarning("RuTracker .torrent download answered {Status}", (int)response.StatusCode);
+            return [];
+        }
+
+        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        const int MaxTorrentSize = 20 * 1024 * 1024;
+        return bytes.Length is > 0 and <= MaxTorrentSize ? bytes : [];
     }
 
     private RuTrackerUnavailableException BlockPage(Uri baseUri, string html)
