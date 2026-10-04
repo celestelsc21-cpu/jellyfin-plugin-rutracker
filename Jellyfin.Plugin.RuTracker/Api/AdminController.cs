@@ -35,7 +35,7 @@ public class AdminController : ControllerBase
     /// the Jellyfin container, and shows how each folder maps to qBittorrent.
     /// </summary>
     /// <response code="200">Validation report.</response>
-    /// <returns>Validation report.</returns>
+    /// <returns>The validation report with mapped folders.</returns>
     [HttpGet("Validate")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<ValidationReport> Validate()
