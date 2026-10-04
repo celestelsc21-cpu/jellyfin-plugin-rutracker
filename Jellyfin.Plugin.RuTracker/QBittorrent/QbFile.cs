@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.RuTracker.QBittorrent;
@@ -36,4 +37,10 @@ public sealed class QbFile
     /// </summary>
     [JsonPropertyName("priority")]
     public int Priority { get; set; }
+
+    /// <summary>
+    /// Gets or sets the first and last piece the file touches.
+    /// </summary>
+    [JsonPropertyName("piece_range")]
+    public IReadOnlyList<int> PieceRange { get; set; } = [];
 }

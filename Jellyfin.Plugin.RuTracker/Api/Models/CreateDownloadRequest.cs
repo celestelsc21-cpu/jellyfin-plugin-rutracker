@@ -30,4 +30,11 @@ public sealed class CreateDownloadRequest
     /// </summary>
     [Range(0, int.MaxValue)]
     public int? StartFileIndex { get; set; }
+
+    /// <summary>
+    /// Gets or sets the 1-based episode number to start with, for torrents whose file list
+    /// is not known yet (magnet links). Ignored when <see cref="StartFileIndex"/> is set.
+    /// </summary>
+    [Range(1, 10000)]
+    public int? StartEpisodeNumber { get; set; }
 }

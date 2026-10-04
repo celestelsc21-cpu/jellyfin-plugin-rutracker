@@ -4,10 +4,13 @@ using System.Net.Http;
 using Jellyfin.Plugin.RuTracker.Access;
 using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.Downloads;
+using Jellyfin.Plugin.RuTracker.Library;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
+using Jellyfin.Plugin.RuTracker.Streaming;
 using Jellyfin.Plugin.RuTracker.Tracker;
 using Jellyfin.Plugin.RuTracker.Web;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,8 +57,13 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         // Downloads: persistent list, manager and the background priority monitor.
         serviceCollection.AddSingleton<DownloadStore>();
+        serviceCollection.AddSingleton<LibraryPublisher>();
         serviceCollection.AddSingleton<IDownloadManager, DownloadManager>();
         serviceCollection.AddHostedService<DownloadMonitor>();
+
+        // Watching while downloading: the "RuTracker" channel and its signed stream links.
+        serviceCollection.AddSingleton<StreamTokens>();
+        serviceCollection.AddSingleton<IChannel, RuTrackerChannel>();
 
         // Adds the RuTracker button to the web client header.
         serviceCollection.AddTransient<IStartupFilter, WebInjectionStartupFilter>();

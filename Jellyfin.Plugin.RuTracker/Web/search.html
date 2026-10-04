@@ -212,7 +212,7 @@
         .modal .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
         .field { display: grid; gap: 6px; margin-bottom: 14px; }
         .field label { font-size: 13px; color: var(--muted); }
-        .field select {
+        .field select, .field input[type=number] {
             padding: 9px 10px;
             color: var(--text);
             background: #2a2a2a;
@@ -220,7 +220,8 @@
             border-radius: var(--radius);
             font-size: 15px;
         }
-        .field .hint { font-size: 12px; color: var(--muted); }
+        .hint { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+        .hint:empty { display: none; }
         .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
         .downloads { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
         .download { padding: 14px; background: var(--panel); border-radius: var(--radius); }
@@ -312,6 +313,13 @@
                 <select id="dialogStart"></select>
                 <div class="hint">Загружается вся раздача: сначала выбранная серия, затем следующие по порядку, в конце — предыдущие.</div>
             </div>
+            <div class="field" id="startNumberField" hidden>
+                <label for="dialogStartNumber">Начать смотреть с серии №</label>
+                <input type="number" id="dialogStartNumber" min="1" max="10000" step="1" value="1">
+                <div class="hint">Список серий станет известен после начала загрузки. Загружается вся раздача, выбранная серия — первой.</div>
+            </div>
+            <div class="hint" id="dialogFolder"></div>
+            <div class="hint">Смотреть, не дожидаясь конца загрузки, можно в канале «RuTracker» (Главная → Каналы). Готовые серии сами появятся в медиатеке.</div>
             <div class="status" id="dialogStatus"></div>
             <div class="actions">
                 <button type="button" class="secondary" id="dialogCancel">Отмена</button>
@@ -674,7 +682,11 @@
                 fillTargets(item.Kind);
                 var startField = document.getElementById('startField');
                 var startSelect = document.getElementById('dialogStart');
+                var numberField = document.getElementById('startNumberField');
                 startField.hidden = true;
+                numberField.hidden = true;
+                document.getElementById('dialogStartNumber').value = '1';
+                setText('dialogFolder', '');
                 startSelect.textContent = '';
                 setText('dialogStatus', 'Получаю список файлов раздачи…');
                 document.getElementById('downloadDialog').hidden = false;
@@ -685,8 +697,11 @@
                     if (files.length > 1) {
                         files.forEach(function (f, i) { startSelect.appendChild(option(f.Index, (i + 1) + '. ' + f.Label)); });
                         startField.hidden = false;
+                    } else if (info && info.FileListKnown === false) {
+                        numberField.hidden = false;
                     }
-                    setText('dialogStatus', files.length ? '' : 'Список файлов станет известен после начала загрузки.');
+                    if (info && info.FolderName) { setText('dialogFolder', 'Папка в медиатеке: ' + info.FolderName); }
+                    setText('dialogStatus', '');
                 }).catch(function (error) {
                     if (dialogItem === item) { setText('dialogStatus', error.message, true); }
                 });
@@ -715,8 +730,13 @@
                     TopicId: dialogItem.TopicId,
                     Kind: document.getElementById('dialogKind').value,
                     TargetId: document.getElementById('dialogTarget').value || null,
-                    StartFileIndex: startField.hidden ? null : parseInt(document.getElementById('dialogStart').value, 10)
+                    StartFileIndex: startField.hidden ? null : parseInt(document.getElementById('dialogStart').value, 10),
+                    StartEpisodeNumber: null
                 };
+                if (!document.getElementById('startNumberField').hidden) {
+                    var number = parseInt(document.getElementById('dialogStartNumber').value, 10);
+                    body.StartEpisodeNumber = number > 1 ? Math.min(number, 10000) : null;
+                }
                 var submit = document.getElementById('dialogSubmit');
                 submit.disabled = true;
                 setText('dialogStatus', 'Отправляю в qBittorrent…');

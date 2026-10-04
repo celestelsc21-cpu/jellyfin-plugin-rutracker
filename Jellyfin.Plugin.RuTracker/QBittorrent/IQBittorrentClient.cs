@@ -48,6 +48,22 @@ public interface IQBittorrentClient
     Task<IReadOnlyList<QbFile>> GetFilesAsync(string hash, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets the piece size of a torrent.
+    /// </summary>
+    /// <param name="hash">Info hash.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Piece size in bytes, or 0 while metadata is unknown.</returns>
+    Task<long> GetPieceSizeAsync(string hash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the state of every piece (0 missing, 1 downloading, 2 downloaded).
+    /// </summary>
+    /// <param name="hash">Info hash.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Piece states.</returns>
+    Task<IReadOnlyList<int>> GetPieceStatesAsync(string hash, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Sets the priority of several files.
     /// </summary>
     /// <param name="hash">Info hash.</param>

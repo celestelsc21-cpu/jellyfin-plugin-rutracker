@@ -70,6 +70,23 @@ internal static partial class EpisodePlanner
     }
 
     /// <summary>
+    /// Resolves a 1-based episode number (in natural order) to a file index.
+    /// </summary>
+    /// <param name="files">Torrent files.</param>
+    /// <param name="episodeNumber">1-based episode number.</param>
+    /// <returns>File index, or <c>null</c> when out of range.</returns>
+    public static int? FileIndexOfEpisode(IEnumerable<TorrentFileEntry> files, int? episodeNumber)
+    {
+        if (episodeNumber is not > 0)
+        {
+            return null;
+        }
+
+        var videos = VideosInOrder(files);
+        return episodeNumber.Value <= videos.Count ? videos[episodeNumber.Value - 1].Index : null;
+    }
+
+    /// <summary>
     /// Computes qBittorrent file priorities: the first unfinished episode in watching order
     /// gets maximal priority, the next one high, everything else normal. Companion files
     /// (external audio tracks, subtitles named after the episode) follow their episode.
@@ -128,8 +145,17 @@ internal static partial class EpisodePlanner
         return name;
     }
 
-    private static IEnumerable<TorrentFileEntry> Companions(IReadOnlyList<TorrentFileEntry> files, TorrentFileEntry episode)
+    /// <summary>
+    /// Gets the non-video files that belong to an episode (external audio, subtitles)
+    /// by name: "Show.S01E02.mkv" → "Show.S01E02.rus.mka", "Show.S01E02.srt".
+    /// </summary>
+    /// <param name="files">Torrent files.</param>
+    /// <param name="episode">Episode file.</param>
+    /// <returns>Companion files.</returns>
+    public static IEnumerable<TorrentFileEntry> Companions(IReadOnlyList<TorrentFileEntry> files, TorrentFileEntry episode)
     {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(episode);
         // "Show.S01E02.mkv" -> "Show.S01E02.rus.mka", "Show.S01E02.srt" (possibly in another folder).
         // The trailing dot keeps "e1" from matching "e10.srt".
         var prefix = Path.GetFileNameWithoutExtension(episode.Path) + ".";

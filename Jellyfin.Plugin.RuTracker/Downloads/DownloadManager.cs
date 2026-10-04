@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.RuTracker.Api.Models;
 using Jellyfin.Plugin.RuTracker.Configuration;
+using Jellyfin.Plugin.RuTracker.Library;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
+using Jellyfin.Plugin.RuTracker.Streaming;
 using Jellyfin.Plugin.RuTracker.Torrents;
 using Jellyfin.Plugin.RuTracker.Tracker;
 using Microsoft.Extensions.Logging;
@@ -22,6 +24,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     private readonly IQBittorrentClient _qbittorrent;
     private readonly DownloadStore _store;
     private readonly IPluginConfigurationAccessor _config;
+    private readonly LibraryPublisher _publisher;
     private readonly ILogger<DownloadManager> _logger;
     private readonly SemaphoreSlim _processGate = new(1, 1);
     private readonly ConcurrentDictionary<Guid, DownloadSnapshot> _snapshots = new();
@@ -33,18 +36,21 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     /// <param name="qbittorrent">qBittorrent client.</param>
     /// <param name="store">Download store.</param>
     /// <param name="config">Configuration accessor.</param>
+    /// <param name="publisher">Library publisher.</param>
     /// <param name="logger">Logger.</param>
     public DownloadManager(
         IRuTrackerClient rutracker,
         IQBittorrentClient qbittorrent,
         DownloadStore store,
         IPluginConfigurationAccessor config,
+        LibraryPublisher publisher,
         ILogger<DownloadManager> logger)
     {
         _rutracker = rutracker;
         _qbittorrent = qbittorrent;
         _store = store;
         _config = config;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -71,7 +77,12 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             : EpisodePlanner.VideosInOrder(torrent.Meta.Files)
                 .Select(f => new TopicFileDto(f.Index, f.Path, EpisodePlanner.Label(f.Path), f.Length, true))
                 .ToList();
-        return new TopicFilesDto(topicId, torrent.Title, files);
+        return new TopicFilesDto(
+            topicId,
+            torrent.Title,
+            files,
+            ReleaseTitle.FolderName(torrent.Title, "RuTracker " + topicId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            torrent.Meta is not null);
     }
 
     /// <summary>
@@ -87,10 +98,10 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         ArgumentNullException.ThrowIfNull(request);
         var config = _config.Current;
         var target = ResolveTarget(config, request.Kind, request.TargetId);
-        var mapper = new PathMapper(config.PathMappings ?? []);
-        if (!mapper.TryToQBittorrent(target.JellyfinPath, out var qbFolder))
+        var copyToLibrary = config.Placement == PlacementMode.CopyAfterComplete;
+        if (copyToLibrary && !PathRules.IsAbsoluteLinuxPath(config.StagingJellyfinPath))
         {
-            throw new DownloadException("Папка «" + target.Name + "» не покрыта соответствием путей. Проверьте настройки плагина.");
+            throw new DownloadException("Включён режим копирования, но промежуточная папка не задана. Попросите администратора проверить настройки.");
         }
 
         var existing = (await _store.GetAllAsync(cancellationToken).ConfigureAwait(false))
@@ -111,6 +122,25 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         }
 
         var hash = torrent.InfoHash ?? throw new DownloadException("Не удалось определить раздачу: нет ни торрент-файла, ни magnet-ссылки.");
+
+        // "Title (Year)" folder so Jellyfin recognises the movie or series.
+        var id = request.TopicId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var folderName = ReleaseTitle.FolderName(torrent.Title, "RuTracker " + id);
+        var libraryFolder = target.JellyfinPath.TrimEnd('/') + "/" + folderName;
+        var downloadFolder = copyToLibrary
+            ? config.StagingJellyfinPath.TrimEnd('/') + "/" + folderName + " [" + id + "]"
+            : libraryFolder;
+        var mapper = new PathMapper(config.PathMappings ?? []);
+        if (!mapper.TryToQBittorrent(downloadFolder, out var qbFolder))
+        {
+            throw new DownloadException("Папка загрузки не покрыта соответствием путей. Проверьте настройки плагина.");
+        }
+
+        if (!copyToLibrary && torrent.Meta is not null)
+        {
+            // Hide every file from the library scanner before qBittorrent creates them.
+            _publisher.HideBeforeStart(downloadFolder, torrent.Meta.Files);
+        }
         if (request.StartFileIndex is { } start && torrent.Meta is not null && torrent.Meta.Files.All(f => f.Index != start))
         {
             throw new DownloadException("Выбранной серии нет в раздаче.");
@@ -134,12 +164,17 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             Title = torrent.Title,
             Kind = request.Kind,
             TargetId = target.Id,
-            JellyfinFolder = target.JellyfinPath,
+            JellyfinFolder = downloadFolder,
+            LibraryFolder = libraryFolder,
+            CopyToLibrary = copyToLibrary,
             QBittorrentFolder = qbFolder,
             InfoHash = hash,
             UserId = userId,
-            StartFileIndex = request.StartFileIndex,
-            Order = torrent.Meta is null ? [] : [.. EpisodePlanner.BuildOrder(torrent.Meta.Files, request.StartFileIndex)],
+            StartFileIndex = request.StartFileIndex ?? (torrent.Meta is null ? null : EpisodePlanner.FileIndexOfEpisode(torrent.Meta.Files, request.StartEpisodeNumber)),
+            StartEpisodeNumber = request.StartEpisodeNumber,
+            Order = torrent.Meta is null
+                ? []
+                : [.. EpisodePlanner.BuildOrder(torrent.Meta.Files, request.StartFileIndex ?? EpisodePlanner.FileIndexOfEpisode(torrent.Meta.Files, request.StartEpisodeNumber))],
             Started = torrent.Meta is null
         };
 
@@ -313,8 +348,10 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
                             if (live is not null)
                             {
                                 live.Order = changed.Order;
+                                live.StartFileIndex = changed.StartFileIndex;
                                 live.Started = changed.Started;
                                 live.State = changed.State;
+                                live.Published = changed.Published;
                             }
                         }
 
@@ -329,6 +366,86 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         finally
         {
             _processGate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ChannelDownload>> GetChannelDownloadsAsync(CancellationToken cancellationToken)
+        => (await _store.GetAllAsync(cancellationToken).ConfigureAwait(false))
+            .Where(r => r.State is DownloadState.Queued or DownloadState.Downloading)
+            .Select(r => new ChannelDownload(r.Id, r.Title, r.Kind, r.Created))
+            .ToList();
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ChannelFile>> GetChannelFilesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var record = (await _store.GetAllAsync(cancellationToken).ConfigureAwait(false)).FirstOrDefault(r => r.Id == id);
+        if (record is null)
+        {
+            return [];
+        }
+
+        var files = await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
+        var byIndex = files.ToDictionary(f => f.Index);
+        return EpisodePlanner.VideosInOrder(files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)))
+            .Select((f, i) => new ChannelFile(f.Index, i + 1, f.Path, EpisodePlanner.Label(f.Path), f.Length, byIndex[f.Index].Progress))
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<StreamSource?> GetStreamSourceAsync(Guid id, int fileIndex, CancellationToken cancellationToken)
+    {
+        var record = (await _store.GetAllAsync(cancellationToken).ConfigureAwait(false)).FirstOrDefault(r => r.Id == id);
+        if (record is null)
+        {
+            return null;
+        }
+
+        var file = (await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(f => f.Index == fileIndex);
+        if (file is null || file.PieceRange.Count < 2 || !EpisodePlanner.IsVideo(file.Name))
+        {
+            return null;
+        }
+
+        var path = SafePath.Combine(record.JellyfinFolder, file.Name);
+        if (path is null)
+        {
+            return null;
+        }
+
+        // qBittorrent may keep unfinished files under a ".!qB" suffix.
+        if (!System.IO.File.Exists(path) && System.IO.File.Exists(path + ".!qB"))
+        {
+            path += ".!qB";
+        }
+
+        return System.IO.File.Exists(path)
+            ? new StreamSource(path, file.Size, record.InfoHash, file.PieceRange[0], file.PieceRange[1], file.Progress >= 1)
+            : null;
+    }
+
+    /// <inheritdoc />
+    public async Task EnsureWatchingAsync(Guid id, int fileIndex, CancellationToken cancellationToken)
+    {
+        var record = (await _store.GetAllAsync(cancellationToken).ConfigureAwait(false)).FirstOrDefault(r => r.Id == id);
+        if (record is null || record.State is not (DownloadState.Queued or DownloadState.Downloading))
+        {
+            return;
+        }
+
+        var files = await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
+        var byIndex = files.ToDictionary(f => f.Index);
+        if (!byIndex.TryGetValue(fileIndex, out var watched) || watched.Progress >= 1)
+        {
+            return;
+        }
+
+        var current = record.Order.FirstOrDefault(i => byIndex.TryGetValue(i, out var f) && f.Progress < 1, -1);
+        if (current != fileIndex)
+        {
+            _logger.LogInformation("Playback started on a later episode of download {Id}; moving it to the front", id);
+            await SetStartAsync(id, fileIndex, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -375,6 +492,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         var entries = files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)).ToList();
         if (record.Order.Count == 0)
         {
+            record.StartFileIndex ??= EpisodePlanner.FileIndexOfEpisode(entries, record.StartEpisodeNumber);
             record.Order = [.. EpisodePlanner.BuildOrder(entries, record.StartFileIndex)];
             changed = true;
         }
@@ -393,6 +511,11 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         {
             await _qbittorrent.StartAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
             record.Started = true;
+            changed = true;
+        }
+
+        if (await _publisher.PublishAsync(record, files, cancellationToken).ConfigureAwait(false))
+        {
             changed = true;
         }
 

@@ -36,6 +36,12 @@ internal static class ForumClassifier
             return MediaKind.Series;
         }
 
+        // Documentary sub-forums are named "[Док] ..." and do not always contain "документ".
+        if (forumName.StartsWith("[Док", StringComparison.OrdinalIgnoreCase) || Has(forumName, "документал"))
+        {
+            return MediaKind.Show;
+        }
+
         if (Has(forumName, "передач") || Has(forumName, "шоу") || Has(forumName, "документ") || Has(forumName, "спорт"))
         {
             return MediaKind.Show;

@@ -94,6 +94,9 @@ internal sealed class QBittorrentClient : IQBittorrentClient, IDisposable
                 form.Add(new StringContent("true"), "sequentialDownload");
                 form.Add(new StringContent("true"), "firstLastPiecePrio");
 
+                // Files go straight into the save path (our "Title (Year)" folder), without the release folder.
+                form.Add(new StringContent("NoSubfolder"), "contentLayout");
+
                 // "stopped" is the qBittorrent 5 name, "paused" the 4.x one; unknown fields are ignored.
                 form.Add(new StringContent(stopped ? "true" : "false"), "stopped");
                 form.Add(new StringContent(stopped ? "true" : "false"), "paused");
@@ -149,6 +152,22 @@ internal sealed class QBittorrentClient : IQBittorrentClient, IDisposable
         }
 
         return files;
+    }
+
+    /// <inheritdoc />
+    public async Task<long> GetPieceSizeAsync(string hash, CancellationToken cancellationToken)
+    {
+        var query = "api/v2/torrents/properties?hash=" + Uri.EscapeDataString(hash);
+        var json = await SendAsync(baseUri => new HttpRequestMessage(HttpMethod.Get, new Uri(baseUri, query)), cancellationToken).ConfigureAwait(false);
+        return QBittorrentProtocol.ReadPieceSize(json);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<int>> GetPieceStatesAsync(string hash, CancellationToken cancellationToken)
+    {
+        var query = "api/v2/torrents/pieceStates?hash=" + Uri.EscapeDataString(hash);
+        var json = await SendAsync(baseUri => new HttpRequestMessage(HttpMethod.Get, new Uri(baseUri, query)), cancellationToken).ConfigureAwait(false);
+        return Deserialize<List<int>>(json) ?? [];
     }
 
     /// <inheritdoc />

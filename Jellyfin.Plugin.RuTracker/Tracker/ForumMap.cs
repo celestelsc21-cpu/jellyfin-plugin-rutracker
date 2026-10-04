@@ -319,6 +319,7 @@ internal static class ForumMap
         [2168] = MediaKind.Show, // [Док] Альтернативная история и наука
         [2169] = MediaKind.Show, // Флора и фауна (HD Video)
         [2171] = MediaKind.Show, // Лыжные гонки
+        [2176] = MediaKind.Show, // [Док] Разное / некондиция
         [2177] = MediaKind.Show, // [Док] Кинематограф и мультипликация
         [2178] = MediaKind.Show, // [Док] Аварии / Катастрофы / Катаклизмы
         [2183] = MediaKind.Movie, // Мультфильмы Ближнего Зарубежья

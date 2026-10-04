@@ -35,9 +35,20 @@ internal sealed class DownloadRecord
     public Guid TargetId { get; set; }
 
     /// <summary>
-    /// Gets or sets the folder inside the Jellyfin container.
+    /// Gets or sets the folder qBittorrent writes to, as the Jellyfin container sees it.
     /// </summary>
     public string JellyfinFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the final library folder ("Title (Year)"); equals <see cref="JellyfinFolder"/>
+    /// unless files are copied from a staging folder. Empty for records from 0.3.0.
+    /// </summary>
+    public string LibraryFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether finished files are copied from a staging folder into the library.
+    /// </summary>
+    public bool CopyToLibrary { get; set; }
 
     /// <summary>
     /// Gets or sets the folder as qBittorrent sees it.
@@ -65,6 +76,17 @@ internal sealed class DownloadRecord
     public int? StartFileIndex { get; set; }
 
     /// <summary>
+    /// Gets or sets the 1-based episode number to start with when only a magnet link was
+    /// available and the file list was unknown at creation time.
+    /// </summary>
+    public int? StartEpisodeNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the video files already made visible in the library (reported or copied).
+    /// </summary>
+    public List<int> Published { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the watching order (video file indexes); empty until the file list is known.
     /// </summary>
     public List<int> Order { get; set; } = [];
@@ -78,4 +100,10 @@ internal sealed class DownloadRecord
     /// Gets or sets the state.
     /// </summary>
     public DownloadState State { get; set; } = DownloadState.Queued;
+
+    /// <summary>
+    /// Gets the library folder, falling back to the download folder for older records.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string EffectiveLibraryFolder => string.IsNullOrEmpty(LibraryFolder) ? JellyfinFolder : LibraryFolder;
 }

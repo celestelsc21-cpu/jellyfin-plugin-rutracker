@@ -69,6 +69,24 @@ internal static partial class QBittorrentProtocol
         }
     }
 
+    /// <summary>
+    /// Reads <c>piece_size</c> from <c>/api/v2/torrents/properties</c>.
+    /// </summary>
+    /// <param name="propertiesJson">Properties JSON.</param>
+    /// <returns>Piece size, or 0 when unknown.</returns>
+    public static long ReadPieceSize(string propertiesJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(propertiesJson);
+            return document.RootElement.TryGetProperty("piece_size", out var value) && value.TryGetInt64(out var size) && size > 0 ? size : 0;
+        }
+        catch (JsonException)
+        {
+            return 0;
+        }
+    }
+
     // A conservative cookie pair: no spaces, separators or control characters.
     [GeneratedRegex("^(?<name>[A-Za-z0-9_-]{1,64})=(?<value>[A-Za-z0-9%._~+/=-]{8,256})$")]
     private static partial Regex CookiePair();
