@@ -20,6 +20,8 @@ namespace Jellyfin.Plugin.RuTracker.Downloads;
 /// </summary>
 internal sealed class DownloadManager : IDownloadManager, IDisposable
 {
+    private static readonly TimeSpan RecoveryInterval = TimeSpan.FromSeconds(30);
+
     private readonly IRuTrackerClient _rutracker;
     private readonly IQBittorrentClient _qbittorrent;
     private readonly DownloadStore _store;
@@ -28,6 +30,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     private readonly ILogger<DownloadManager> _logger;
     private readonly SemaphoreSlim _processGate = new(1, 1);
     private readonly ConcurrentDictionary<Guid, DownloadSnapshot> _snapshots = new();
+    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _recoveries = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DownloadManager"/> class.
@@ -513,6 +516,14 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             await _qbittorrent.StartAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
             record.Started = true;
             changed = true;
+        }
+        else if (string.Equals(torrent.State, "error", StringComparison.OrdinalIgnoreCase)
+            && DateTimeOffset.UtcNow - _recoveries.GetValueOrDefault(record.Id) > RecoveryInterval)
+        {
+            // A temporary file error (e.g. a sharing violation on Windows) stops the torrent: resume it.
+            _recoveries[record.Id] = DateTimeOffset.UtcNow;
+            _logger.LogWarning("qBittorrent stopped download {Id} with a file error; resuming it", record.Id);
+            await _qbittorrent.StartAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
         }
 
         if (await _publisher.PublishAsync(record, files, cancellationToken).ConfigureAwait(false))

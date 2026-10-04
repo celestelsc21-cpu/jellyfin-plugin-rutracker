@@ -160,9 +160,8 @@ public class StreamController : ControllerBase
         var buffer = ArrayPool<byte>.Shared.Rent(ChunkSize);
         try
         {
-            // FileShare.Delete lets qBittorrent rename the file when it completes.
-            var file = new FileStream(source.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16, useAsync: true);
-            await using (file.ConfigureAwait(false))
+            // No lock is taken: qBittorrent keeps writing (and may rename) the file meanwhile.
+            using (var file = UnlockedFileReader.Open(source.Path))
             {
                 var waited = TimeSpan.Zero;
                 var complete = source.Complete || pieceSize <= 0;
@@ -184,8 +183,7 @@ public class StreamController : ControllerBase
                     var read = 0;
                     if (toRead > 0)
                     {
-                        file.Position = position;
-                        read = await file.ReadAsync(buffer.AsMemory(0, toRead), cancellationToken).ConfigureAwait(false);
+                        read = file.Read(buffer, toRead, position);
                     }
 
                     if (read <= 0)
