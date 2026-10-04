@@ -23,7 +23,18 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Test
-        run: dotnet test -c Release
+        run: |
+          set -o pipefail
+          dotnet test -c Release --logger "console;verbosity=normal" 2>&1 | tee test.log
+
+      - name: Report failures as annotation
+        if: failure()
+        run: |
+          # Surface the essential lines (build errors, failed tests, assertion messages)
+          # as one annotation, readable without downloading logs.
+          msg=$(grep -E "error |Failed |\[FAIL\]|Assert\.|Expected|Actual|Exception|NU1[0-9]{3}" test.log \
+                | grep -v "^\s*at " | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Build or test failure::${msg}"
 
       - name: Build plugin
         run: dotnet publish Jellyfin.Plugin.RuTracker/Jellyfin.Plugin.RuTracker.csproj -c Release -o out
