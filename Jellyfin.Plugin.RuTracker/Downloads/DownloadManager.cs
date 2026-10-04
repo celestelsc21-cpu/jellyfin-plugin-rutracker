@@ -141,6 +141,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             // Hide every file from the library scanner before qBittorrent creates them.
             _publisher.HideBeforeStart(downloadFolder, torrent.Meta.Files);
         }
+
         if (request.StartFileIndex is { } start && torrent.Meta is not null && torrent.Meta.Files.All(f => f.Index != start))
         {
             throw new DownloadException("Выбранной серии нет в раздаче.");

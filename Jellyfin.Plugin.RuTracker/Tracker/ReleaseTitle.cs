@@ -64,7 +64,7 @@ internal static partial class ReleaseTitle
     {
         var (names, year) = Parse(title);
         var name = names.LastOrDefault(n => n.Any(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z'))
-            ?? names.FirstOrDefault()
+            ?? (names.Count > 0 ? names[0] : null)
             ?? fallback;
 
         var folder = Sanitize(name);
