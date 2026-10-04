@@ -210,10 +210,11 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private async Task<string> GetAuthenticatedOnHostAsync(PluginConfiguration config, Uri baseUri, string relative, CancellationToken cancellationToken)
     {
         var host = baseUri.Host;
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (!_sessions.TryGetValue(host, out var session))
         {
             session = SessionCookie.Normalize(config.RuTrackerSessionCookie)
-                ?? await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+                ?? await LoginAsync(config, baseUri, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             _sessions[host] = session;
         }
 
@@ -251,7 +252,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         _sessions.Remove(host);
         try
         {
-            session = await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+            session = await LoginAsync(config, baseUri, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         }
         catch (RuTrackerException ex) when (ex is not RuTrackerUnavailableException && SessionCookie.Normalize(config.RuTrackerSessionCookie) is not null)
         {
@@ -263,7 +264,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         }
 
         _sessions[host] = session;
-        html = await GetPageAsync(baseUri, relative, session, cancellationToken).ConfigureAwait(false);
+        html = await GetPageAsync(baseUri, relative, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(html))
         {
             return html;
@@ -292,7 +293,8 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         // 2. Session from the pasted cookie, if any.
         string? session = null;
-        var cookie = SessionCookie.Normalize(config.RuTrackerSessionCookie);\n        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
+        var cookie = SessionCookie.Normalize(config.RuTrackerSessionCookie);
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (cookie is not null)
         {
             var html = await GetPageAsync(baseUri, IndexPage, cookie, cloudflareCookie, cancellationToken).ConfigureAwait(false);
