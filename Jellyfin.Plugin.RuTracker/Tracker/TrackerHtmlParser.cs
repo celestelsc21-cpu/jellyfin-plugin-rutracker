@@ -36,6 +36,17 @@ internal static partial class TrackerHtmlParser
            || html.Contains("static.rutracker.cc/captcha", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets a value indicating whether the page is a Cloudflare challenge page.
+    /// </summary>
+    /// <param name="html">Page HTML.</param>
+    /// <returns><c>true</c> if the page is a Cloudflare challenge.</returns>
+    public static bool IsCloudflareChallenge(string html)
+        => html.Contains("<title>Just a moment...</title>", StringComparison.OrdinalIgnoreCase)
+           || html.Contains("challenges.cloudflare.com", StringComparison.OrdinalIgnoreCase)
+           || html.Contains("cf-chl-", StringComparison.OrdinalIgnoreCase)
+           || html.Contains("Enable JavaScript and cookies to continue", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Collects hidden fields of the login form (for example <c>redirect</c> or a form token)
     /// so they can be sent back with the credentials, like a browser does.
     /// Captcha fields are skipped: they cannot be answered automatically.

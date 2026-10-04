@@ -86,6 +86,23 @@ public class ConnectionChecksTests
     }
 
     [Theory]
+    [InlineData("abc123456789", "abc123456789")]
+    [InlineData("cf_clearance=abc123456789", "abc123456789")]
+    [InlineData("cf_clearance=abc123456789; Path=/", "abc123456789")]
+    [InlineData("", null)]
+    [InlineData("bad value", null)]
+    public void CloudflareCookie_Normalize(string raw, string? expected)
+        => Assert.Equal(expected, CloudflareCookie.Normalize(raw));
+
+    [Fact]
+    public void CloudflareChallenge_IsDetected()
+    {
+        Assert.True(TrackerHtmlParser.IsCloudflareChallenge("<title>Just a moment...</title>"));
+        Assert.True(TrackerHtmlParser.IsCloudflareChallenge("https://challenges.cloudflare.com/cdn-cgi/challenge-platform/"));
+        Assert.False(TrackerHtmlParser.IsCloudflareChallenge("<html><body>rutracker</body></html>"));
+    }
+
+    [Theory]
     [InlineData("Ok.", true)]
     [InlineData("Ok.\n", true)]
     [InlineData("Fails.", false)]

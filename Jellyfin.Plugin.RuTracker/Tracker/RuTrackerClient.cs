@@ -172,6 +172,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private async Task<string> GetAuthenticatedPageAsync(string relative, CancellationToken cancellationToken)
     {
         var config = _config.Current;
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -209,14 +210,15 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private async Task<string> GetAuthenticatedOnHostAsync(PluginConfiguration config, Uri baseUri, string relative, CancellationToken cancellationToken)
     {
         var host = baseUri.Host;
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (!_sessions.TryGetValue(host, out var session))
         {
             session = SessionCookie.Normalize(config.RuTrackerSessionCookie)
-                ?? await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+                ?? await LoginAsync(config, baseUri, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             _sessions[host] = session;
         }
 
-        var html = await GetPageAsync(baseUri, relative, session, cancellationToken).ConfigureAwait(false);
+        var html = await GetPageAsync(baseUri, relative, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(html))
         {
             return html;
@@ -225,7 +227,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // The page did not show a logged-in user. If the session still works on the
         // index page, the problem is this particular request, not the login: report
         // what RuTracker answered instead of logging in again.
-        var index = await GetPageAsync(baseUri, IndexPage, session, cancellationToken).ConfigureAwait(false);
+        var index = await GetPageAsync(baseUri, IndexPage, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(index))
         {
             var title = TrackerHtmlParser.ExtractTitle(html);
@@ -250,7 +252,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         _sessions.Remove(host);
         try
         {
-            session = await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+            session = await LoginAsync(config, baseUri, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         }
         catch (RuTrackerException ex) when (ex is not RuTrackerUnavailableException && SessionCookie.Normalize(config.RuTrackerSessionCookie) is not null)
         {
@@ -262,7 +264,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         }
 
         _sessions[host] = session;
-        html = await GetPageAsync(baseUri, relative, session, cancellationToken).ConfigureAwait(false);
+        html = await GetPageAsync(baseUri, relative, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(html))
         {
             return html;
@@ -279,7 +281,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 1. Reachability: the site answers and it is really RuTracker.
         try
         {
-            var html = await GetPageAsync(baseUri, IndexPage, null, cancellationToken).ConfigureAwait(false);
+            var html = await GetPageAsync(baseUri, IndexPage, null, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             var title = TrackerHtmlParser.ExtractTitle(html);
             steps.Add(new DiagnosticStep($"{host}: соединение", true, title.Length > 0 ? $"Сайт отвечает: «{title}»." : "Сайт отвечает."));
         }
@@ -292,9 +294,10 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 2. Session from the pasted cookie, if any.
         string? session = null;
         var cookie = SessionCookie.Normalize(config.RuTrackerSessionCookie);
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         if (cookie is not null)
         {
-            var html = await GetPageAsync(baseUri, IndexPage, cookie, cancellationToken).ConfigureAwait(false);
+            var html = await GetPageAsync(baseUri, IndexPage, cookie, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             if (TrackerHtmlParser.IsLoggedIn(html))
             {
                 session = cookie;
@@ -321,7 +324,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
             try
             {
-                session = await LoginAsync(config, baseUri, cancellationToken).ConfigureAwait(false);
+                session = await LoginAsync(config, baseUri, cloudflareCookie, cancellationToken).ConfigureAwait(false);
                 steps.Add(new DiagnosticStep($"{host}: вход по логину и паролю", true, "RuTracker принял логин и пароль."));
             }
             catch (RuTrackerException ex)
@@ -331,7 +334,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             }
 
             // 4. The session really works.
-            var html = await GetPageAsync(baseUri, IndexPage, session, cancellationToken).ConfigureAwait(false);
+            var html = await GetPageAsync(baseUri, IndexPage, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             if (!TrackerHtmlParser.IsLoggedIn(html))
             {
                 steps.Add(new DiagnosticStep($"{host}: проверка сессии", false, "После входа страницы открываются как для гостя."));
@@ -343,7 +346,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         // 5. The search page itself (it may behave differently from the index page).
         // A Cyrillic query exercises the query-string encoding as well.
-        var search = await GetPageAsync(baseUri, RuTrackerUrls.SearchPath("Матрица"), session, cancellationToken)
+        var search = await GetPageAsync(baseUri, RuTrackerUrls.SearchPath("Матрица"), session, cloudflareCookie, cancellationToken)
             .ConfigureAwait(false);
         if (!TrackerHtmlParser.IsLoggedIn(search))
         {
@@ -365,7 +368,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         return true;
     }
 
-    private async Task<string> LoginAsync(PluginConfiguration config, Uri baseUri, CancellationToken cancellationToken)
+    private async Task<string> LoginAsync(PluginConfiguration config, Uri baseUri, string? cloudflareCookie, CancellationToken cancellationToken)
     {
         if (!HasCredentials(config))
         {
@@ -388,12 +391,18 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         //    and may carry hidden form fields or a captcha.
         Dictionary<string, string> cookies;
         IReadOnlyList<KeyValuePair<string, string>> hiddenFields;
-        using (var page = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, loginUri), cancellationToken).ConfigureAwait(false))
+        using (var page = await SendAsync(() => CreateRequest(HttpMethod.Get, loginUri, cloudflareCookie), cancellationToken).ConfigureAwait(false))
         {
             cookies = page.Headers.TryGetValues("Set-Cookie", out var pageCookies)
                 ? CookieJar.Collect(pageCookies)
                 : new Dictionary<string, string>(StringComparer.Ordinal);
             var html = Cp1251.GetString(await page.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+            if (TrackerHtmlParser.IsCloudflareChallenge(html))
+            {
+                throw new RuTrackerUnavailableException(
+                    $"{baseUri.Host} требует проверку Cloudflare. Введите cookie cf_clearance из браузера в настройках плагина.");
+            }
+
             if (!TrackerHtmlParser.LooksLikeRuTracker(html))
             {
                 throw BlockPage(baseUri, html);
@@ -423,10 +432,8 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         using var response = await SendAsync(
             () =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Post, loginUri)
-                {
-                    Content = new ByteArrayContent(bodyBytes)
-                };
+                var request = CreateRequest(HttpMethod.Post, loginUri, cloudflareCookie);
+                request.Content = new ByteArrayContent(bodyBytes);
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
                 request.Headers.Referrer = loginUri;
                 request.Headers.Add("Origin", baseUri.GetLeftPart(UriPartial.Authority));
@@ -451,6 +458,12 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 3. No session: explain why as precisely as possible.
         var status = (int)response.StatusCode;
         var responseHtml = Cp1251.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+        if (TrackerHtmlParser.IsCloudflareChallenge(responseHtml))
+        {
+            throw new RuTrackerUnavailableException(
+                $"{baseUri.Host} требует проверку Cloudflare. Введите cookie cf_clearance из браузера в настройках плагина.");
+        }
+
         if (responseHtml.Length > 0 && !TrackerHtmlParser.LooksLikeRuTracker(responseHtml))
         {
             throw BlockPage(baseUri, responseHtml);
@@ -505,7 +518,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             + " в браузере и вставьте значение cookie bb_session в настройках плагина.");
     }
 
-    private async Task<string> GetPageAsync(Uri baseUri, string relative, string? session, CancellationToken cancellationToken)
+    private async Task<string> GetPageAsync(Uri baseUri, string relative, string? session, string? cloudflareCookie, CancellationToken cancellationToken)
     {
         var uri = new Uri(baseUri, relative);
         var redirects = 0;
@@ -515,7 +528,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             using var response = await SendAsync(
                 () =>
                 {
-                    var request = new HttpRequestMessage(HttpMethod.Get, target);
+                    var request = CreateRequest(HttpMethod.Get, target, cloudflareCookie);
                     if (session is not null)
                     {
                         request.Headers.Add("Cookie", SessionCookie.Name + "=" + session);
@@ -564,6 +577,26 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         return new RuTrackerUnavailableException(title.Length > 0
             ? $"Вместо RuTracker пришла другая страница («{title}»). Вероятно, провайдер блокирует {baseUri.Host} для сервера."
             : $"Вместо RuTracker пришла другая страница. Вероятно, провайдер блокирует {baseUri.Host} для сервера.");
+    }
+
+    private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri, string? cloudflareCookie)
+    {
+        var request = new HttpRequestMessage(method, uri);
+        var userAgent = _config.Current.RuTrackerUserAgent;
+        request.Headers.UserAgent.ParseAdd(
+            string.IsNullOrWhiteSpace(userAgent)
+                ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+                : userAgent);
+        AddCloudflareCookie(request, cloudflareCookie);
+        return request;
+    }
+
+    private static void AddCloudflareCookie(HttpRequestMessage request, string? cloudflareCookie)
+    {
+        if (cloudflareCookie is not null)
+        {
+            request.Headers.Add("Cookie", "cf_clearance=" + cloudflareCookie);
+        }
     }
 
     private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
