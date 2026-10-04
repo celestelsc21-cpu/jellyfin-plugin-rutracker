@@ -97,6 +97,9 @@
                     <div class="fieldDescription">Проверяется канал RuTracker (кто из пользователей его видит) и право Jellyfin записывать в папки загрузки.</div>
                     <button is="emby-button" type="button" id="TestLibraryButton" class="raised emby-button"><span>Проверить канал и папки</span></button>
                     <div id="TestLibraryResult" style="margin:.5em 0 1em"></div>
+                    <button is="emby-button" type="button" id="AllowChannelButton" class="raised emby-button"><span>Разрешить канал всем с ролью «Поиск»</span></button>
+                    <div class="fieldDescription">Добавляет канал RuTracker в разрешённые каналы профиля Jellyfin у пользователей с ролью «Поиск». Остальные настройки профиля не меняются.</div>
+                    <div id="AllowChannelResult" style="margin:.5em 0 1em"></div>
 
                     <h2 class="sectionTitle">Доступ</h2>
                     <div class="fieldDescription">Администраторы имеют все права. «Скачивание» включает «Поиск».</div>
@@ -334,6 +337,23 @@
                 });
                 page.querySelector('#TestLibraryButton').addEventListener('click', function (e) {
                     runCheck('RuTracker/Admin/TestLibrary', '#TestLibraryResult', e.currentTarget);
+                });
+                page.querySelector('#AllowChannelButton').addEventListener('click', function (e) {
+                    var button = e.currentTarget;
+                    var box = page.querySelector('#AllowChannelResult');
+                    box.style.color = '';
+                    box.textContent = 'Сохраняю настройки и разрешаю канал…';
+                    button.disabled = true;
+                    saveConfig().then(function () {
+                        return ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('RuTracker/Admin/AllowChannel'), dataType: 'json' });
+                    }).then(function (result) {
+                        box.textContent = (result && result.Message) || 'Готово.';
+                    }).catch(function () {
+                        box.textContent = 'Не удалось разрешить канал.';
+                        box.style.color = '#e57373';
+                    }).then(function () {
+                        button.disabled = false;
+                    });
                 });
                 page.querySelector('#RuTrackerConfigForm').addEventListener('submit', save);
                 page.querySelector('#AddMapping').addEventListener('click', function () { addMappingRow(null); });

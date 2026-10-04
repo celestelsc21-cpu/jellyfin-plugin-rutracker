@@ -115,4 +115,14 @@ public class AdminController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<DiagnosticReport>> TestLibrary()
         => await LibraryDiagnostics.RunAsync(_config.Current, _channels, _users, _access).ConfigureAwait(false);
+
+    /// <summary>
+    /// Allows the "RuTracker" channel for every user with the search role.
+    /// </summary>
+    /// <returns>A user-facing message.</returns>
+    /// <response code="200">Message returned.</response>
+    [HttpPost("AllowChannel")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<MessageDto>> AllowChannel()
+        => new MessageDto(await LibraryDiagnostics.AllowChannelAsync(_channels, _users, _access).ConfigureAwait(false));
 }

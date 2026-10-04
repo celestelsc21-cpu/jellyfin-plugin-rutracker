@@ -123,4 +123,55 @@ internal static class LibraryDiagnostics
                 + "Подключите эту папку в контейнер Jellyfin с правом записи (без «:ro»).");
         }
     }
+
+    /// <summary>
+    /// Allows the "RuTracker" channel for every user who has the plugin's search role
+    /// but whose Jellyfin profile does not allow channels.
+    /// </summary>
+    /// <param name="channels">Channel manager.</param>
+    /// <param name="users">User manager.</param>
+    /// <param name="access">Plugin access service.</param>
+    /// <returns>User-facing summary.</returns>
+    public static async Task<string> AllowChannelAsync(IChannelManager channels, IUserManager users, IAccessService access)
+    {
+        var all = await channels.GetChannelsInternalAsync(new ChannelQuery()).ConfigureAwait(false);
+        var channel = all.Items.FirstOrDefault(c => string.Equals(c.Name, ChannelName, StringComparison.OrdinalIgnoreCase));
+        if (channel is null)
+        {
+            return "Канал RuTracker не зарегистрирован. Перезапустите Jellyfin.";
+        }
+
+        var changed = new List<string>();
+        foreach (var user in users.GetUsers().ToList())
+        {
+            if (!access.GetAccess(user.Id).CanSearch)
+            {
+                continue;
+            }
+
+            // Same round trip as the dashboard's user page: read the full policy, change one list, save.
+            var policy = users.GetUserDto(user).Policy;
+            var blocked = policy.BlockedChannels ?? [];
+            var enabled = policy.EnabledChannels ?? [];
+            var needsUnblock = blocked.Contains(channel.Id);
+            var needsEnable = !policy.EnableAllChannels && !enabled.Contains(channel.Id);
+            if (!needsUnblock && !needsEnable)
+            {
+                continue;
+            }
+
+            policy.BlockedChannels = blocked.Where(id => id != channel.Id).ToArray();
+            if (needsEnable)
+            {
+                policy.EnabledChannels = [.. enabled, channel.Id];
+            }
+
+            await users.UpdatePolicyAsync(user.Id, policy).ConfigureAwait(false);
+            changed.Add(user.Username);
+        }
+
+        return changed.Count == 0
+            ? "Всем пользователям с ролью «Поиск» канал уже разрешён."
+            : "Канал RuTracker разрешён: " + string.Join(", ", changed) + ". Обновите у них главную страницу (Ctrl+F5).";
+    }
 }
