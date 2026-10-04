@@ -16,6 +16,23 @@
       <ExcludeAssets>runtime</ExcludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- Loaded by the server already (same versions as Jellyfin 10.11.11). -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.11">
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.11">
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      AngleSharp: robust HTML parsing of RuTracker pages (the site has no search API).
+      Not used by the Jellyfin server, so there is no version conflict; shipped with the plugin.
+    -->
+    <PackageReference Include="AngleSharp" Version="1.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +44,10 @@
   <ItemGroup>
     <None Remove="Configuration\configPage.html" />
     <EmbeddedResource Include="Configuration\configPage.html" />
+    <None Remove="Web\search.html" />
+    <EmbeddedResource Include="Web\search.html" />
+    <None Remove="Web\header.js" />
+    <EmbeddedResource Include="Web\header.js" />
   </ItemGroup>
 
   <ItemGroup>

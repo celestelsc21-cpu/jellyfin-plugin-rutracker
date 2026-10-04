@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>RuTracker — поиск</title>
+    <style>
+        :root {
+            --bg: #101010;
+            --panel: #1c1c1c;
+            --panel-hover: #262626;
+            --line: #2e2e2e;
+            --text: #e8e8e8;
+            --muted: #9a9a9a;
+            --accent: #00a4dc;
+            --accent-ink: #ffffff;
+            --good: #4caf50;
+            --bad: #e57373;
+            --radius: 8px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Noto Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 15px;
+            line-height: 1.45;
+        }
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: #202020;
+            border-bottom: 1px solid var(--line);
+        }
+        header a.back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text);
+            text-decoration: none;
+            padding: 6px 10px;
+            border-radius: var(--radius);
+        }
+        header a.back:hover { background: var(--panel-hover); }
+        header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+        main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+        form.search { display: flex; gap: 8px; flex-wrap: wrap; }
+        form.search input[type=search] {
+            flex: 1 1 260px;
+            min-width: 0;
+            padding: 11px 14px;
+            font-size: 16px;
+            color: var(--text);
+            background: #292929;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            outline: none;
+        }
+        form.search input[type=search]:focus { border-color: var(--accent); }
+        button.primary {
+            padding: 11px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent-ink);
+            background: var(--accent);
+            border: 0;
+            border-radius: var(--radius);
+            cursor: pointer;
+        }
+        button.primary:disabled { opacity: .6; cursor: default; }
+        .kinds { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 4px; }
+        .kinds button {
+            padding: 6px 14px;
+            color: var(--text);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .kinds button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+        .status { margin: 14px 0; color: var(--muted); }
+        .status.error { color: var(--bad); }
+        .results { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+        .item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 4px 16px;
+            padding: 12px 14px;
+            background: var(--panel);
+            border-radius: var(--radius);
+        }
+        .item:hover { background: var(--panel-hover); }
+        .item .title { color: var(--text); text-decoration: none; font-weight: 600; overflow-wrap: anywhere; }
+        .item .title:hover { color: var(--accent); }
+        .item .meta { grid-column: 1; color: var(--muted); font-size: 13px; display: flex; gap: 6px 14px; flex-wrap: wrap; }
+        .item .peers { grid-row: 1 / span 2; grid-column: 2; text-align: right; font-size: 13px; white-space: nowrap; align-self: center; }
+        .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #2b3a40; color: #9fdcf2; font-size: 12px; }
+        .seed { color: var(--good); font-weight: 600; }
+        .leech { color: var(--bad); }
+        .size { color: var(--text); font-weight: 600; }
+        @media (max-width: 560px) {
+            .item { grid-template-columns: 1fr; }
+            .item .peers { grid-row: auto; grid-column: 1; text-align: left; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a class="back" id="backLink" href="#">← Jellyfin</a>
+        <h1>Поиск на RuTracker</h1>
+    </header>
+    <main>
+        <form class="search" id="searchForm" autocomplete="off">
+            <input type="search" id="query" placeholder="Название фильма, сериала или передачи" minlength="2" maxlength="100" required autofocus>
+            <button class="primary" type="submit" id="searchButton">Найти</button>
+        </form>
+        <div class="kinds" role="group" aria-label="Тип">
+            <button type="button" data-kind="" aria-pressed="true">Все</button>
+            <button type="button" data-kind="Movie" aria-pressed="false">Фильмы</button>
+            <button type="button" data-kind="Series" aria-pressed="false">Сериалы</button>
+            <button type="button" data-kind="Show" aria-pressed="false">Передачи</button>
+        </div>
+        <div class="status" id="status" role="status"></div>
+        <ul class="results" id="results"></ul>
+    </main>
+    <script>
+        (function () {
+            'use strict';
+
+            var KIND_NAMES = { Movie: 'Фильм', Series: 'Сериал', Show: 'Передача' };
+
+            // Server root, works with and without a Jellyfin base URL and trailing slash.
+            var root = (function () {
+                var path = window.location.pathname;
+                var index = path.toLowerCase().indexOf('/rutracker/web');
+                return index >= 0 ? path.substring(0, index + 1) : '/';
+            })();
+
+            document.getElementById('backLink').href = root + 'web/#/home';
+
+            function credentials() {
+                try {
+                    var stored = JSON.parse(window.localStorage.getItem('jellyfin_credentials') || '{}');
+                    var servers = (stored.Servers || []).filter(function (s) { return s.AccessToken && s.UserId; });
+                    servers.sort(function (a, b) { return (b.DateLastAccessed || 0) - (a.DateLastAccessed || 0); });
+                    return servers[0] || null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            var auth = credentials();
+            var state = { kind: '', lastQuery: '', items: [] };
+            var statusEl = document.getElementById('status');
+            var resultsEl = document.getElementById('results');
+            var button = document.getElementById('searchButton');
+
+            function setStatus(text, isError) {
+                statusEl.textContent = text || '';
+                statusEl.classList.toggle('error', !!isError);
+            }
+
+            function api(path) {
+                // Only the token is sent: the server fills device info from the existing session.
+                return fetch(root + path, {
+                    headers: { 'Authorization': 'MediaBrowser Token="' + auth.AccessToken + '"', 'Accept': 'application/json' },
+                    credentials: 'same-origin'
+                }).then(function (response) {
+                    return response.json().catch(function () { return null; }).then(function (body) {
+                        if (response.ok) {
+                            return body;
+                        }
+                        var message = body && body.Message;
+                        if (response.status === 401) { message = 'Сессия Jellyfin истекла. Войдите заново.'; }
+                        if (response.status === 403) { message = 'У вас нет доступа к поиску. Обратитесь к администратору.'; }
+                        throw new Error(message || ('Ошибка ' + response.status));
+                    });
+                });
+            }
+
+            function formatSize(bytes) {
+                var units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+                var value = bytes || 0;
+                var unit = 0;
+                while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+                return value.toLocaleString('ru-RU', { maximumFractionDigits: unit >= 3 ? 2 : 0 }) + ' ' + units[unit];
+            }
+
+            function formatDate(iso) {
+                if (!iso) { return ''; }
+                var date = new Date(iso);
+                return isNaN(date) ? '' : date.toLocaleDateString('ru-RU');
+            }
+
+            function el(tag, className, text) {
+                var node = document.createElement(tag);
+                if (className) { node.className = className; }
+                if (text !== undefined && text !== null) { node.textContent = text; }
+                return node;
+            }
+
+            function render() {
+                resultsEl.textContent = '';
+                var visible = state.items.filter(function (i) { return !state.kind || i.Kind === state.kind; });
+                if (!state.lastQuery) { return; }
+                if (!visible.length) {
+                    setStatus('Ничего не найдено. Попробуйте другое название или тип «Все».');
+                    return;
+                }
+                setStatus('Найдено: ' + visible.length);
+
+                visible.forEach(function (item) {
+                    var li = el('li', 'item');
+
+                    var title = el('a', 'title', item.Title);
+                    // Only RuTracker topic links from our own API are rendered.
+                    if (/^https:\/\//.test(item.TopicUrl)) {
+                        title.href = item.TopicUrl;
+                    }
+                    title.target = '_blank';
+                    title.rel = 'noopener noreferrer';
+                    li.appendChild(title);
+
+                    var peers = el('div', 'peers');
+                    peers.appendChild(el('span', 'seed', '↑ ' + item.Seeders));
+                    peers.appendChild(document.createTextNode('  '));
+                    peers.appendChild(el('span', 'leech', '↓ ' + item.Leechers));
+                    li.appendChild(peers);
+
+                    var meta = el('div', 'meta');
+                    meta.appendChild(el('span', 'badge', KIND_NAMES[item.Kind] || item.Kind));
+                    meta.appendChild(el('span', 'size', formatSize(item.SizeBytes)));
+                    if (item.ForumName) { meta.appendChild(el('span', null, item.ForumName)); }
+                    var added = formatDate(item.Added);
+                    if (added) { meta.appendChild(el('span', null, added)); }
+                    li.appendChild(meta);
+
+                    resultsEl.appendChild(li);
+                });
+            }
+
+            function search(query) {
+                button.disabled = true;
+                setStatus('Ищу на RuTracker…');
+                resultsEl.textContent = '';
+                api('RuTracker/Search?query=' + encodeURIComponent(query)).then(function (items) {
+                    state.items = items || [];
+                    state.lastQuery = query;
+                    render();
+                }).catch(function (error) {
+                    state.items = [];
+                    setStatus(error.message, true);
+                }).then(function () {
+                    button.disabled = false;
+                });
+            }
+
+            document.querySelectorAll('.kinds button').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    state.kind = chip.getAttribute('data-kind');
+                    document.querySelectorAll('.kinds button').forEach(function (b) {
+                        b.setAttribute('aria-pressed', b === chip ? 'true' : 'false');
+                    });
+                    render();
+                });
+            });
+
+            document.getElementById('searchForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                var query = document.getElementById('query').value.trim();
+                if (query.length >= 2) { search(query); }
+            });
+
+            if (!auth) {
+                setStatus('Сначала войдите в Jellyfin в этом браузере, затем вернитесь на эту страницу.', true);
+                button.disabled = true;
+            }
+        })();
+    </script>
+</body>
+</html>

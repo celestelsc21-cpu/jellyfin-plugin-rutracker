@@ -1,6 +1,6 @@
 name: "RuTracker"
 guid: "6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93"
-version: "0.1.0.0"
+version: "0.2.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Search RuTracker and download/stream torrents via qBittorrent"
@@ -12,5 +12,8 @@ category: "General"
 owner: "celesta"
 artifacts:
   - "Jellyfin.Plugin.RuTracker.dll"
-changelog: >
-  0.1.0.0 - Stage 1: plugin skeleton, configuration, role-based access.
+  - "AngleSharp.dll"
+changelog: |
+  0.2.0.0 - RuTracker search page and a header button in the web client;
+  admin check of RuTracker login.
+  0.1.0.0 - Plugin skeleton, configuration, path mapping, role-based access.

@@ -29,6 +29,9 @@
                         <input id="RuTrackerSessionCookie" type="password" is="emby-input" autocomplete="off" />
                         <div class="fieldDescription">Если вход блокируется капчей: войдите в браузере и вставьте значение cookie bb_session.</div>
                     </div>
+                    <button is="emby-button" type="button" id="TestRuTrackerButton" class="raised emby-button"><span>Проверить вход на RuTracker</span></button>
+                    <div class="fieldDescription">Проверяются сохранённые настройки — сначала нажмите «Сохранить».</div>
+                    <div id="TestRuTrackerResult" style="margin:.5em 0 1em"></div>
 
                     <h2 class="sectionTitle">qBittorrent</h2>
                     <div class="inputContainer">
@@ -258,7 +261,26 @@
                     }).catch(function () { box.textContent = 'Не удалось выполнить проверку.'; });
                 }
 
+                function testRuTracker() {
+                    var box = page.querySelector('#TestRuTrackerResult');
+                    function show(text, isError) {
+                        box.textContent = text;
+                        box.style.color = isError ? '#e57373' : '#81c784';
+                    }
+                    show('Проверяю…', false);
+                    ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('RuTracker/Admin/TestRuTracker'), dataType: 'json' })
+                        .then(function (r) { show((r && r.Message) || 'Вход выполнен.', false); }, function (err) {
+                            if (err && typeof err.json === 'function') {
+                                err.json().then(function (b) { show((b && b.Message) || 'Ошибка проверки.', true); },
+                                    function () { show('Ошибка проверки.', true); });
+                            } else {
+                                show('Не удалось выполнить проверку.', true);
+                            }
+                        });
+                }
+
                 page.addEventListener('pageshow', load);
+                page.querySelector('#TestRuTrackerButton').addEventListener('click', testRuTracker);
                 page.querySelector('#RuTrackerConfigForm').addEventListener('submit', save);
                 page.querySelector('#AddMapping').addEventListener('click', function () { addMappingRow(null); });
                 page.querySelector('#AddTarget').addEventListener('click', function () { addTargetRow(null); });
