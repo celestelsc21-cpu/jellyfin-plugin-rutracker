@@ -172,6 +172,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
     private async Task<string> GetAuthenticatedPageAsync(string relative, CancellationToken cancellationToken)
     {
         var config = _config.Current;
+        var cloudflareCookie = CloudflareCookie.Normalize(config.RuTrackerCloudflareCookie);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -216,7 +217,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             _sessions[host] = session;
         }
 
-        var html = await GetPageAsync(baseUri, relative, session, cancellationToken).ConfigureAwait(false);
+        var html = await GetPageAsync(baseUri, relative, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(html))
         {
             return html;
@@ -225,7 +226,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // The page did not show a logged-in user. If the session still works on the
         // index page, the problem is this particular request, not the login: report
         // what RuTracker answered instead of logging in again.
-        var index = await GetPageAsync(baseUri, IndexPage, session, cancellationToken).ConfigureAwait(false);
+        var index = await GetPageAsync(baseUri, IndexPage, session, cloudflareCookie, cancellationToken).ConfigureAwait(false);
         if (TrackerHtmlParser.IsLoggedIn(index))
         {
             var title = TrackerHtmlParser.ExtractTitle(html);
@@ -279,7 +280,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 1. Reachability: the site answers and it is really RuTracker.
         try
         {
-            var html = await GetPageAsync(baseUri, IndexPage, null, cancellationToken).ConfigureAwait(false);
+            var html = await GetPageAsync(baseUri, IndexPage, null, cloudflareCookie, cancellationToken).ConfigureAwait(false);
             var title = TrackerHtmlParser.ExtractTitle(html);
             steps.Add(new DiagnosticStep($"{host}: соединение", true, title.Length > 0 ? $"Сайт отвечает: «{title}»." : "Сайт отвечает."));
         }
