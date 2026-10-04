@@ -30,6 +30,16 @@
                         <input id="RuTrackerPassword" type="password" is="emby-input" autocomplete="new-password" />
                     </div>
                     <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerCloudflareCookie">Cookie Cloudflare cf_clearance (необязательно)</label>
+                        <input id="RuTrackerCloudflareCookie" type="password" is="emby-input" autocomplete="off" />
+                        <div class="fieldDescription">Если перед поиском появляется «Just a moment…»: откройте RuTracker в браузере, пройдите проверку Cloudflare и скопируйте cookie cf_clearance. Cookie действует ограниченное время.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RuTrackerUserAgent">User-Agent браузера (необязательно)</label>
+                        <input id="RuTrackerUserAgent" type="text" is="emby-input" autocomplete="off" />
+                        <div class="fieldDescription">Если указываете cf_clearance, укажите тот же User-Agent, с которым браузер прошёл проверку. Пусто — Chrome 140.</div>
+                    </div>
+                    <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused" for="RuTrackerSessionCookie">Cookie bb_session (необязательно)</label>
                         <input id="RuTrackerSessionCookie" type="password" is="emby-input" autocomplete="off" />
                         <div class="fieldDescription">Если вход блокируется капчей: войдите в браузере и вставьте значение cookie bb_session.</div>
@@ -109,7 +119,7 @@
                 var pluginId = '6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93';
                 var page = document.querySelector('#RuTrackerConfigPage');
                 var kinds = [['Movie', 'Фильм'], ['Series', 'Сериал'], ['Show', 'Передача']];
-                var textFields = ['RuTrackerBaseUrl', 'RuTrackerMirrorUrl', 'RuTrackerUsername', 'RuTrackerPassword', 'RuTrackerSessionCookie',
+                var textFields = ['RuTrackerBaseUrl', 'RuTrackerMirrorUrl', 'RuTrackerUsername', 'RuTrackerPassword', 'RuTrackerCloudflareCookie', 'RuTrackerUserAgent', 'RuTrackerSessionCookie',
                     'QBittorrentUrl', 'QBittorrentUsername', 'QBittorrentPassword', 'QBittorrentCategory', 'StagingJellyfinPath'];
 
                 // Jellyfin serializes Guids without dashes; compare normalized values.
