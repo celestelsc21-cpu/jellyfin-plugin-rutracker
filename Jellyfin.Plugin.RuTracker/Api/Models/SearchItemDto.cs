@@ -16,6 +16,8 @@ namespace Jellyfin.Plugin.RuTracker.Api.Models;
 /// <param name="Downloads">Completed download count.</param>
 /// <param name="Added">Registration date.</param>
 /// <param name="TopicUrl">Link to the topic on RuTracker.</param>
+/// <param name="Author">Uploader name.</param>
+/// <param name="HasSubtitles">The title announces subtitles.</param>
 public sealed record SearchItemDto(
     long TopicId,
     string Title,
@@ -26,4 +28,6 @@ public sealed record SearchItemDto(
     int Leechers,
     int Downloads,
     DateTimeOffset? Added,
-    Uri TopicUrl);
+    Uri TopicUrl,
+    string Author,
+    bool HasSubtitles);

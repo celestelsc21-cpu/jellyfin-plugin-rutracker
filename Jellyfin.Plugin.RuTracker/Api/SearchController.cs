@@ -89,7 +89,9 @@ public class SearchController : ControllerBase
                 t.Leechers,
                 t.Downloads,
                 t.Added,
-                new Uri(baseUrl + "/forum/viewtopic.php?t=" + t.TopicId.ToString(CultureInfo.InvariantCulture))))
+                new Uri(baseUrl + "/forum/viewtopic.php?t=" + t.TopicId.ToString(CultureInfo.InvariantCulture)),
+                t.Author,
+                TitleTags.HasSubtitles(t.Title)))
             .ToList();
 
         return Ok(items);

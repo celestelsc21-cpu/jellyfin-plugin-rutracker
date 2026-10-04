@@ -1,6 +1,6 @@
 name: "RuTracker"
 guid: "6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93"
-version: "0.2.5.0"
+version: "0.2.6.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Search RuTracker and download/stream torrents via qBittorrent"
@@ -14,6 +14,8 @@ artifacts:
   - "Jellyfin.Plugin.RuTracker.dll"
   - "AngleSharp.dll"
 changelog: |
+  0.2.6.0 - Search page: sorting by seeders, torrent date and size; subtitles filter;
+  multi-select filters by forum and uploader; uploader shown in results.
   0.2.5.0 - Add Cloudflare cf_clearance support and matching browser User-Agent.
   0.2.4.0 - Fix Cyrillic search: the query string is sent in UTF-8; the connection
   check now searches a Cyrillic title; no needless re-login when the session is valid.
