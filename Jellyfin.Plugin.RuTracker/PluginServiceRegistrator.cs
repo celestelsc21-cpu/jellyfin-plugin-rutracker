@@ -5,6 +5,7 @@ using Jellyfin.Plugin.RuTracker.Access;
 using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.Downloads;
 using Jellyfin.Plugin.RuTracker.Library;
+using Jellyfin.Plugin.RuTracker.Metadata;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
 using Jellyfin.Plugin.RuTracker.Streaming;
 using Jellyfin.Plugin.RuTracker.Tracker;
@@ -58,6 +59,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Downloads: persistent list, manager and the background priority monitor.
         serviceCollection.AddSingleton<DownloadStore>();
         serviceCollection.AddSingleton<LibraryPublisher>();
+        serviceCollection.AddSingleton<MetadataMatcher>();
+        serviceCollection.AddSingleton<IMetadataMatcher>(provider => provider.GetRequiredService<MetadataMatcher>());
         serviceCollection.AddSingleton<IDownloadManager, DownloadManager>();
         serviceCollection.AddHostedService<DownloadMonitor>();
 

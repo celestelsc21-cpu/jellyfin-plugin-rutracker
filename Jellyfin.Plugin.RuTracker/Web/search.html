@@ -209,6 +209,13 @@
             border-radius: 12px;
         }
         .modal h2 { margin: 0 0 4px; font-size: 18px; }
+        .match { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; }
+        .match img { width: 64px; height: 96px; object-fit: cover; border-radius: 6px; background: #2a2a2a; }
+        .match img[hidden] + div { grid-column: 1 / -1; }
+        .match .overview { font-size: 12px; color: var(--muted); max-height: 5.2em; overflow: hidden; }
+        .match-search { display: flex; gap: 8px; }
+        .match-search input { flex: 1; min-width: 0; padding: 9px 10px; color: var(--text); background: #2a2a2a; border: 1px solid var(--line); border-radius: var(--radius); font-size: 15px; }
+        .download .poster { float: left; width: 40px; height: 60px; object-fit: cover; border-radius: 4px; margin: 0 10px 4px 0; }
         .modal .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
         .field { display: grid; gap: 6px; margin-bottom: 14px; }
         .field label { font-size: 13px; color: var(--muted); }
@@ -307,6 +314,27 @@
                 <label for="dialogTarget">Куда загрузить</label>
                 <select id="dialogTarget"></select>
                 <div class="hint" id="dialogTargetHint"></div>
+            </div>
+            <div class="field">
+                <label for="dialogMatch">Сопоставление с базой (TMDb и др.)</label>
+                <select id="dialogMatch"></select>
+                <div class="match" id="matchCard" hidden>
+                    <img id="matchPoster" alt="" referrerpolicy="no-referrer" hidden>
+                    <div>
+                        <div id="matchTitle"></div>
+                        <div class="overview" id="matchOverview"></div>
+                    </div>
+                </div>
+                <div class="match-search">
+                    <input type="search" id="matchQuery" placeholder="Найти по названию" aria-label="Найти по названию">
+                    <button type="button" class="secondary" id="matchFind">Найти</button>
+                </div>
+                <div class="hint">Jellyfin сразу узнает фильм или сериал и загрузит описание, постеры и актёров.</div>
+            </div>
+            <div class="field" id="seasonField" hidden>
+                <label for="dialogSeason">Сезон</label>
+                <input type="number" id="dialogSeason" min="0" max="100" step="1" placeholder="несколько сезонов">
+                <div class="hint">Серии попадут в папку «Season NN» внутри папки сериала. Оставьте пустым, если в раздаче несколько сезонов.</div>
             </div>
             <div class="field" id="startField" hidden>
                 <label for="dialogStart">Начать смотреть с</label>
@@ -688,6 +716,11 @@
                 document.getElementById('dialogStartNumber').value = '1';
                 setText('dialogFolder', '');
                 startSelect.textContent = '';
+                topicSeason = null;
+                document.getElementById('dialogSeason').value = '';
+                document.getElementById('matchQuery').value = '';
+                updateKindFields(item.Kind);
+                loadMatches(item);
                 setText('dialogStatus', 'Получаю список файлов раздачи…');
                 document.getElementById('downloadDialog').hidden = false;
 
@@ -700,11 +733,104 @@
                     } else if (info && info.FileListKnown === false) {
                         numberField.hidden = false;
                     }
-                    if (info && info.FolderName) { setText('dialogFolder', 'Папка в медиатеке: ' + info.FolderName); }
+                    topicSeason = info ? info.SeasonNumber : null;
+                    document.getElementById('dialogSeason').value = topicSeason == null ? '' : String(topicSeason);
                     setText('dialogStatus', '');
+                    schedulePreview();
                 }).catch(function (error) {
                     if (dialogItem === item) { setText('dialogStatus', error.message, true); }
                 });
+            }
+
+            var topicSeason = null;
+            var matches = [];
+            var matchRequest = 0;
+            var previewTimer = null;
+
+            function updateKindFields(kind) {
+                document.getElementById('seasonField').hidden = kind === 'Movie';
+            }
+
+            function fillMatches(list, keepKey) {
+                matches = list || [];
+                var select = document.getElementById('dialogMatch');
+                select.textContent = '';
+                matches.forEach(function (m) {
+                    select.appendChild(option(m.Key, m.Name + (m.Year ? ' (' + m.Year + ')' : '') + (m.Provider ? ' — ' + m.Provider : '')));
+                });
+                select.appendChild(option('', matches.length ? 'Не сопоставлять' : 'Ничего не найдено — не сопоставлять'));
+                select.value = keepKey && matches.some(function (m) { return m.Key === keepKey; }) ? keepKey : (matches.length ? matches[0].Key : '');
+                showMatch();
+            }
+
+            function showMatch() {
+                var key = document.getElementById('dialogMatch').value;
+                var m = matches.filter(function (x) { return x.Key === key; })[0];
+                var card = document.getElementById('matchCard');
+                card.hidden = !m;
+                if (m) {
+                    var poster = document.getElementById('matchPoster');
+                    poster.hidden = !m.ImageUrl;
+                    if (m.ImageUrl) { poster.src = m.ImageUrl; } else { poster.removeAttribute('src'); }
+                    document.getElementById('matchTitle').textContent = m.Name + (m.Year ? ' (' + m.Year + ')' : '');
+                    document.getElementById('matchOverview').textContent = m.Overview || '';
+                }
+                schedulePreview();
+            }
+
+            function loadMatches(item) {
+                var request = ++matchRequest;
+                var select = document.getElementById('dialogMatch');
+                select.textContent = '';
+                select.appendChild(option('', 'Ищу в базах…'));
+                document.getElementById('matchCard').hidden = true;
+                var kind = document.getElementById('dialogKind').value;
+                api('RuTracker/Topics/' + item.TopicId + '/Matches?kind=' + encodeURIComponent(kind)).then(function (list) {
+                    if (request === matchRequest && dialogItem === item) { fillMatches(list); }
+                }).catch(function () {
+                    if (request === matchRequest && dialogItem === item) { fillMatches([]); }
+                });
+            }
+
+            function findMatches() {
+                if (!dialogItem) { return; }
+                var text = document.getElementById('matchQuery').value.trim();
+                if (!text) { loadMatches(dialogItem); return; }
+                var year = null;
+                var m = /\s(\d{4})$/.exec(text);
+                if (m) { year = m[1]; text = text.slice(0, -5).trim(); }
+                var request = ++matchRequest;
+                var kind = document.getElementById('dialogKind').value;
+                api('RuTracker/Metadata/Search?kind=' + encodeURIComponent(kind) + '&name=' + encodeURIComponent(text) + (year ? '&year=' + year : '')).then(function (list) {
+                    if (request === matchRequest) { fillMatches(list); }
+                }).catch(function (error) {
+                    if (request === matchRequest) { setText('dialogStatus', error.message, true); }
+                });
+            }
+
+            function requestBody() {
+                var kind = document.getElementById('dialogKind').value;
+                var seasonText = document.getElementById('dialogSeason').value;
+                var season = parseInt(seasonText, 10);
+                return {
+                    TopicId: dialogItem.TopicId,
+                    Kind: kind,
+                    TargetId: document.getElementById('dialogTarget').value || null,
+                    MatchKey: document.getElementById('dialogMatch').value || null,
+                    SeasonNumber: kind !== 'Movie' && seasonText !== '' && season >= 0 && season <= 100 ? season : null
+                };
+            }
+
+            function schedulePreview() {
+                clearTimeout(previewTimer);
+                previewTimer = setTimeout(function () {
+                    if (!dialogItem || !document.getElementById('dialogTarget').value) { return; }
+                    var item = dialogItem;
+                    api('RuTracker/Downloads/Preview', { method: 'POST', body: requestBody() }).then(function (p) {
+                        if (dialogItem !== item) { return; }
+                        setText('dialogFolder', 'Папка: ' + p.Folder + (p.ExistingFolder ? ' (папка сериала уже есть — новые серии добавятся в неё)' : ''));
+                    }).catch(function () { setText('dialogFolder', ''); });
+                }, 300);
             }
 
             function closeDialog(id) {
@@ -712,7 +838,18 @@
                 if (id === 'downloadDialog') { dialogItem = null; }
             }
 
-            document.getElementById('dialogKind').addEventListener('change', function (e) { fillTargets(e.target.value); });
+            document.getElementById('dialogKind').addEventListener('change', function (e) {
+                fillTargets(e.target.value);
+                updateKindFields(e.target.value);
+                if (dialogItem) { loadMatches(dialogItem); }
+            });
+            document.getElementById('dialogTarget').addEventListener('change', schedulePreview);
+            document.getElementById('dialogSeason').addEventListener('input', schedulePreview);
+            document.getElementById('dialogMatch').addEventListener('change', showMatch);
+            document.getElementById('matchFind').addEventListener('click', findMatches);
+            document.getElementById('matchQuery').addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); findMatches(); }
+            });
             document.getElementById('dialogCancel').addEventListener('click', function () { closeDialog('downloadDialog'); });
             document.getElementById('startCancel').addEventListener('click', function () { closeDialog('startDialog'); });
             document.querySelectorAll('.modal').forEach(function (m) {
@@ -726,13 +863,9 @@
                 e.preventDefault();
                 if (!dialogItem) { return; }
                 var startField = document.getElementById('startField');
-                var body = {
-                    TopicId: dialogItem.TopicId,
-                    Kind: document.getElementById('dialogKind').value,
-                    TargetId: document.getElementById('dialogTarget').value || null,
-                    StartFileIndex: startField.hidden ? null : parseInt(document.getElementById('dialogStart').value, 10),
-                    StartEpisodeNumber: null
-                };
+                var body = requestBody();
+                body.StartFileIndex = startField.hidden ? null : parseInt(document.getElementById('dialogStart').value, 10);
+                body.StartEpisodeNumber = null;
                 if (!document.getElementById('startNumberField').hidden) {
                     var number = parseInt(document.getElementById('dialogStartNumber').value, 10);
                     body.StartEpisodeNumber = number > 1 ? Math.min(number, 10000) : null;
@@ -775,9 +908,17 @@
 
                 items.forEach(function (d) {
                     var li = el('li', 'download');
+                    if (d.ImageUrl) {
+                        var poster = el('img', 'poster');
+                        poster.alt = '';
+                        poster.referrerPolicy = 'no-referrer';
+                        poster.src = d.ImageUrl;
+                        li.appendChild(poster);
+                    }
                     var head = el('div', 'head');
                     head.appendChild(el('span', 'name', d.Title));
                     head.appendChild(el('span', 'badge', KIND_NAMES[d.Kind] || d.Kind));
+                    if (d.SeasonNumber != null) { head.appendChild(el('span', 'badge', 'сезон ' + d.SeasonNumber)); }
                     li.appendChild(head);
                     li.appendChild(bar(d.Progress));
 

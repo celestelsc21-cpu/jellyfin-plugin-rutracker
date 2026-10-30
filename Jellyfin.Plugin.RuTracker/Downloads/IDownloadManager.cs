@@ -27,6 +27,14 @@ public interface IDownloadManager
     Task<TopicFilesDto> GetTopicFilesAsync(long topicId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Shows where a download would be placed in the library.
+    /// </summary>
+    /// <param name="request">Download request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The destination folder.</returns>
+    Task<DownloadPreviewDto> PreviewAsync(CreateDownloadRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Starts a download.
     /// </summary>
     /// <param name="userId">Requesting user.</param>

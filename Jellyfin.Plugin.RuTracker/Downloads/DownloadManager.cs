@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.RuTracker.Api.Models;
 using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.Library;
+using Jellyfin.Plugin.RuTracker.Metadata;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
 using Jellyfin.Plugin.RuTracker.Streaming;
 using Jellyfin.Plugin.RuTracker.Torrents;
@@ -27,6 +29,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     private readonly DownloadStore _store;
     private readonly IPluginConfigurationAccessor _config;
     private readonly LibraryPublisher _publisher;
+    private readonly MetadataMatcher _matcher;
     private readonly ILogger<DownloadManager> _logger;
     private readonly SemaphoreSlim _processGate = new(1, 1);
     private readonly ConcurrentDictionary<Guid, DownloadSnapshot> _snapshots = new();
@@ -40,6 +43,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     /// <param name="store">Download store.</param>
     /// <param name="config">Configuration accessor.</param>
     /// <param name="publisher">Library publisher.</param>
+    /// <param name="matcher">Metadata matcher.</param>
     /// <param name="logger">Logger.</param>
     public DownloadManager(
         IRuTrackerClient rutracker,
@@ -47,6 +51,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         DownloadStore store,
         IPluginConfigurationAccessor config,
         LibraryPublisher publisher,
+        MetadataMatcher matcher,
         ILogger<DownloadManager> logger)
     {
         _rutracker = rutracker;
@@ -54,6 +59,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         _store = store;
         _config = config;
         _publisher = publisher;
+        _matcher = matcher;
         _logger = logger;
     }
 
@@ -85,7 +91,33 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             torrent.Title,
             files,
             ReleaseTitle.FolderName(torrent.Title, "RuTracker " + topicId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            torrent.Meta is not null);
+            torrent.Meta is not null,
+            LibraryLayout.SeasonNumber(torrent.Title));
+    }
+
+    /// <summary>
+    /// Shows where a download would be placed in the library.
+    /// </summary>
+    /// <param name="request">Download request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Folder relative to the destination.</returns>
+    /// <exception cref="DownloadException">The request cannot be fulfilled.</exception>
+    public async Task<DownloadPreviewDto> PreviewAsync(CreateDownloadRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var target = ResolveTarget(_config.Current, request.Kind, request.TargetId);
+        TopicTorrent torrent;
+        try
+        {
+            torrent = await _rutracker.GetTopicTorrentAsync(request.TopicId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RuTrackerException ex)
+        {
+            throw new DownloadException(ex.Message, ex);
+        }
+
+        var layout = ResolveLayout(target, request, torrent.Title);
+        return new DownloadPreviewDto(target.Name + "/" + layout.RelativeFolder, layout.ExistingFolder);
     }
 
     /// <summary>
@@ -126,12 +158,12 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
 
         var hash = torrent.InfoHash ?? throw new DownloadException("Не удалось определить раздачу: нет ни торрент-файла, ни magnet-ссылки.");
 
-        // "Title (Year)" folder so Jellyfin recognises the movie or series.
+        // One folder per movie or series ("Title (Year) [tmdbid-N]"), shared by all seasons.
         var id = request.TopicId.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        var folderName = ReleaseTitle.FolderName(torrent.Title, "RuTracker " + id);
-        var libraryFolder = target.JellyfinPath.TrimEnd('/') + "/" + folderName;
+        var layout = ResolveLayout(target, request, torrent.Title);
+        var libraryFolder = target.JellyfinPath.TrimEnd('/') + "/" + layout.RelativeFolder;
         var downloadFolder = copyToLibrary
-            ? config.StagingJellyfinPath.TrimEnd('/') + "/" + folderName + " [" + id + "]"
+            ? config.StagingJellyfinPath.TrimEnd('/') + "/" + ReleaseTitle.FolderName(torrent.Title, "RuTracker " + id) + " [" + id + "]"
             : libraryFolder;
         var mapper = new PathMapper(config.PathMappings ?? []);
         if (!mapper.TryToQBittorrent(downloadFolder, out var qbFolder))
@@ -176,6 +208,13 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             UserId = userId,
             StartFileIndex = request.StartFileIndex ?? (torrent.Meta is null ? null : EpisodePlanner.FileIndexOfEpisode(torrent.Meta.Files, request.StartEpisodeNumber)),
             StartEpisodeNumber = request.StartEpisodeNumber,
+            SeasonNumber = layout.Season,
+            MatchName = layout.Match?.Name,
+            MatchYear = layout.Match?.Year,
+            MatchTag = layout.Match?.Tag,
+            ImageUrl = layout.Match?.ImageUrl,
+            Overview = layout.Match?.Overview,
+            ProviderIds = layout.Match is null ? [] : new Dictionary<string, string>(layout.Match.ProviderIds),
             Order = torrent.Meta is null
                 ? []
                 : [.. EpisodePlanner.BuildOrder(torrent.Meta.Files, request.StartFileIndex ?? EpisodePlanner.FileIndexOfEpisode(torrent.Meta.Files, request.StartEpisodeNumber))],
@@ -226,7 +265,9 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
                 s?.VideoCount ?? r.Order.Count,
                 s?.VideosDone ?? 0,
                 r.Created,
-                isAdministrator || r.UserId == callerId);
+                isAdministrator || r.UserId == callerId,
+                r.ImageUrl,
+                r.SeasonNumber);
         }).ToList();
     }
 
@@ -377,7 +418,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     public async Task<IReadOnlyList<ChannelDownload>> GetChannelDownloadsAsync(CancellationToken cancellationToken)
         => (await _store.GetAllAsync(cancellationToken).ConfigureAwait(false))
             .Where(r => r.State is DownloadState.Queued or DownloadState.Downloading)
-            .Select(r => new ChannelDownload(r.Id, r.Title, r.Kind, r.Created))
+            .Select(r => new ChannelDownload(r.Id, r.Title, r.Kind, r.Created, r.ImageUrl, r.Overview, r.ProviderIds))
             .ToList();
 
     /// <inheritdoc />
@@ -455,6 +496,67 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
 
     /// <inheritdoc />
     public void Dispose() => _processGate.Dispose();
+
+    private LibraryPlacement ResolveLayout(DownloadTarget target, CreateDownloadRequest request, string title)
+    {
+        MetadataMatch? match = null;
+        if (!string.IsNullOrEmpty(request.MatchKey))
+        {
+            match = _matcher.Find(request.MatchKey)
+                ?? throw new DownloadException("Сопоставление устарело. Закройте окно и нажмите «Смотреть» ещё раз.");
+        }
+
+        var (names, year) = ReleaseTitle.Parse(title);
+        var isMovie = request.Kind == MediaKind.Movie;
+        string folder;
+        if (match is not null)
+        {
+            folder = LibraryLayout.FolderName(match.Name, match.Year, match.Tag);
+        }
+        else
+        {
+            // Without a match a series folder gets no year: the release year is the season's.
+            var fallback = ReleaseTitle.FolderName(title, "RuTracker " + request.TopicId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            folder = isMovie || year is null ? fallback : LibraryLayout.FolderName(fallback[..fallback.LastIndexOf(" (", StringComparison.Ordinal)], null, null);
+        }
+
+        var existing = false;
+        if (!isMovie)
+        {
+            // Later seasons go into the folder of the series that is already in the library.
+            var candidates = new List<string>(names);
+            if (match is not null)
+            {
+                candidates.Insert(0, match.Name);
+            }
+
+            var found = LibraryLayout.FindExisting(ListFolders(target.JellyfinPath), match?.Tag, candidates);
+            if (found is not null)
+            {
+                folder = found;
+                existing = true;
+            }
+        }
+
+        var season = isMovie ? null : request.SeasonNumber;
+        var relative = season is null ? folder : folder + "/" + LibraryLayout.SeasonFolder(season.Value);
+        return new LibraryPlacement(relative, existing, season, match);
+    }
+
+    private List<string> ListFolders(string path)
+    {
+        try
+        {
+            return Directory.Exists(path)
+                ? Directory.EnumerateDirectories(path).Select(Path.GetFileName).OfType<string>().ToList()
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Could not list the destination folder: {Reason}", ex.Message);
+            return [];
+        }
+    }
 
     private static DownloadTarget ResolveTarget(PluginConfiguration config, MediaKind kind, Guid? targetId)
     {

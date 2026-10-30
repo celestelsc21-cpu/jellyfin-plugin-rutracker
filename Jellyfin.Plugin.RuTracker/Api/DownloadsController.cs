@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.RuTracker.Access;
 using Jellyfin.Plugin.RuTracker.Api.Models;
+using Jellyfin.Plugin.RuTracker.Configuration;
 using Jellyfin.Plugin.RuTracker.Downloads;
+using Jellyfin.Plugin.RuTracker.Metadata;
 using Jellyfin.Plugin.RuTracker.QBittorrent;
 using Jellyfin.Plugin.RuTracker.Tracker;
 using Microsoft.AspNetCore.Authorization;
@@ -26,14 +28,17 @@ public class DownloadsController : ControllerBase
 {
     private readonly IDownloadManager _manager;
     private readonly IAccessService _access;
+    private readonly IMetadataMatcher _matcher;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DownloadsController"/> class.
     /// </summary>
     /// <param name="manager">Download manager.</param>
     /// <param name="access">Access service.</param>
-    public DownloadsController(IDownloadManager manager, IAccessService access)
+    /// <param name="matcher">Metadata matcher.</param>
+    public DownloadsController(IDownloadManager manager, IAccessService access, IMetadataMatcher matcher)
     {
+        _matcher = matcher;
         _manager = manager;
         _access = access;
     }
@@ -80,6 +85,80 @@ public class DownloadsController : ControllerBase
     /// <response code="200">Started (or already running); see the message.</response>
     /// <response code="400">The request cannot be fulfilled; see the message.</response>
     /// <returns>Result with a user-facing message.</returns>
+    /// <summary>
+    /// Suggests movies or series from the metadata providers for a topic.
+    /// </summary>
+    /// <param name="topicId">Topic id.</param>
+    /// <param name="kind">Release type.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Matches, best first.</returns>
+    /// <response code="200">Matches returned (possibly empty).</response>
+    /// <response code="502">RuTracker is unavailable.</response>
+    [HttpGet("Topics/{topicId}/Matches")]
+    [RequireRuTrackerRole(AccessRole.Download)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<ActionResult<IReadOnlyList<MetadataMatchDto>>> GetMatches(
+        [FromRoute, Range(1, long.MaxValue)] long topicId,
+        [FromQuery] MediaKind kind,
+        CancellationToken cancellationToken)
+    {
+        TopicFilesDto topic;
+        try
+        {
+            topic = await _manager.GetTopicFilesAsync(topicId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RuTrackerException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new MessageDto(ex.Message));
+        }
+
+        return Ok(await _matcher.SuggestAsync(kind, topic.Title, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Searches movies or series in the metadata providers by name.
+    /// </summary>
+    /// <param name="kind">Release type.</param>
+    /// <param name="name">Name.</param>
+    /// <param name="year">Optional year.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Matches.</returns>
+    /// <response code="200">Matches returned (possibly empty).</response>
+    [HttpGet("Metadata/Search")]
+    [RequireRuTrackerRole(AccessRole.Download)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<MetadataMatchDto>>> SearchMetadata(
+        [FromQuery] MediaKind kind,
+        [FromQuery, Required, StringLength(200, MinimumLength = 1)] string name,
+        [FromQuery, Range(1800, 2200)] int? year,
+        CancellationToken cancellationToken)
+        => Ok(await _matcher.SearchAsync(kind, name, year, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>
+    /// Shows where a download would be placed.
+    /// </summary>
+    /// <param name="request">Download request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Destination folder.</returns>
+    /// <response code="200">Folder returned.</response>
+    /// <response code="400">The request cannot be fulfilled.</response>
+    [HttpPost("Downloads/Preview")]
+    [RequireRuTrackerRole(AccessRole.Download)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<DownloadPreviewDto>> Preview([FromBody, Required] CreateDownloadRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _manager.PreviewAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DownloadException ex)
+        {
+            return BadRequest(new MessageDto(ex.Message));
+        }
+    }
+
     [HttpPost("Downloads")]
     [RequireRuTrackerRole(AccessRole.Download)]
     [ProducesResponseType(StatusCodes.Status200OK)]

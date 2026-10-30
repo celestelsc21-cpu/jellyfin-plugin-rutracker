@@ -206,14 +206,25 @@ internal sealed class RuTrackerChannel : IChannel, IRequiresMediaInfoCallback, I
     private async Task<List<ChannelItemInfo>> GetFoldersAsync(CancellationToken cancellationToken)
     {
         var downloads = await _manager.GetChannelDownloadsAsync(cancellationToken).ConfigureAwait(false);
-        return downloads.Select(d => new ChannelItemInfo
+        return downloads.Select(d =>
         {
-            Id = FolderId(d.Id),
-            Name = d.Title,
-            Type = ChannelItemType.Folder,
-            FolderType = d.Kind == MediaKind.Movie ? ChannelFolderType.Container : ChannelFolderType.Series,
-            DateCreated = d.Created.UtcDateTime,
-            DateModified = d.Created.UtcDateTime
+            var item = new ChannelItemInfo
+            {
+                Id = FolderId(d.Id),
+                Name = d.Title,
+                Overview = d.Overview,
+                ImageUrl = d.ImageUrl,
+                Type = ChannelItemType.Folder,
+                FolderType = d.Kind == MediaKind.Movie ? ChannelFolderType.Container : ChannelFolderType.Series,
+                DateCreated = d.Created.UtcDateTime,
+                DateModified = d.Created.UtcDateTime
+            };
+            foreach (var (key, value) in d.ProviderIds)
+            {
+                item.ProviderIds[key] = value;
+            }
+
+            return item;
         }).ToList();
     }
 

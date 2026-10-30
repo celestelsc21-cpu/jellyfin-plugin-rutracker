@@ -37,4 +37,17 @@ public sealed class CreateDownloadRequest
     /// </summary>
     [Range(1, 10000)]
     public int? StartEpisodeNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the season: files go into a "Season NN" subfolder of the series folder.
+    /// <c>null</c> keeps them in the series folder (several seasons in one release).
+    /// </summary>
+    [Range(0, 100)]
+    public int? SeasonNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the key of the chosen metadata match (<see cref="MetadataMatchDto.Key"/>), if any.
+    /// </summary>
+    [StringLength(100)]
+    public string? MatchKey { get; set; }
 }

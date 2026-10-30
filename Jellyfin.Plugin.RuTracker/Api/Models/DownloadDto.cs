@@ -22,6 +22,8 @@ namespace Jellyfin.Plugin.RuTracker.Api.Models;
 /// <param name="VideosDone">Number of finished video files.</param>
 /// <param name="Created">When the download was started.</param>
 /// <param name="CanDelete">The caller may cancel it.</param>
+/// <param name="ImageUrl">Poster of the matched movie or series.</param>
+/// <param name="SeasonNumber">Season folder number, if any.</param>
 public sealed record DownloadDto(
     Guid Id,
     long TopicId,
@@ -37,4 +39,6 @@ public sealed record DownloadDto(
     int VideoCount,
     int VideosDone,
     DateTimeOffset Created,
-    bool CanDelete);
+    bool CanDelete,
+    string? ImageUrl,
+    int? SeasonNumber);

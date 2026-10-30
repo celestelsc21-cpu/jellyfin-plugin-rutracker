@@ -97,6 +97,41 @@ internal sealed class DownloadRecord
     public bool Started { get; set; }
 
     /// <summary>
+    /// Gets or sets the season subfolder number, if any.
+    /// </summary>
+    public int? SeasonNumber { get; set; }
+
+    /// <summary>
+    /// Gets or sets the matched title.
+    /// </summary>
+    public string? MatchName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the matched year.
+    /// </summary>
+    public int? MatchYear { get; set; }
+
+    /// <summary>
+    /// Gets or sets the folder tag of the match (e.g. tmdbid-1396).
+    /// </summary>
+    public string? MatchTag { get; set; }
+
+    /// <summary>
+    /// Gets or sets the poster URL of the match.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the description of the match.
+    /// </summary>
+    public string? Overview { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider ids of the match.
+    /// </summary>
+    public Dictionary<string, string> ProviderIds { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the state.
     /// </summary>
     public DownloadState State { get; set; } = DownloadState.Queued;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Jellyfin.Plugin.RuTracker.Configuration;
 
 namespace Jellyfin.Plugin.RuTracker.Streaming;
@@ -10,4 +11,14 @@ namespace Jellyfin.Plugin.RuTracker.Streaming;
 /// <param name="Title">Topic title.</param>
 /// <param name="Kind">Media kind.</param>
 /// <param name="Created">When the download started.</param>
-public sealed record ChannelDownload(Guid Id, string Title, MediaKind Kind, DateTimeOffset Created);
+/// <param name="ImageUrl">Poster of the matched movie or series.</param>
+/// <param name="Overview">Description of the match.</param>
+/// <param name="ProviderIds">Provider ids of the match.</param>
+public sealed record ChannelDownload(
+    Guid Id,
+    string Title,
+    MediaKind Kind,
+    DateTimeOffset Created,
+    string? ImageUrl,
+    string? Overview,
+    IReadOnlyDictionary<string, string> ProviderIds);
