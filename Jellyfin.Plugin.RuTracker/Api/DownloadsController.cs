@@ -78,14 +78,6 @@ public class DownloadsController : ControllerBase
     }
 
     /// <summary>
-    /// Starts a download.
-    /// </summary>
-    /// <param name="request">Request.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <response code="200">Started (or already running); see the message.</response>
-    /// <response code="400">The request cannot be fulfilled; see the message.</response>
-    /// <returns>Result with a user-facing message.</returns>
-    /// <summary>
     /// Suggests movies or series from the metadata providers for a topic.
     /// </summary>
     /// <param name="topicId">Topic id.</param>
@@ -159,6 +151,14 @@ public class DownloadsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Starts a download.
+    /// </summary>
+    /// <param name="request">Request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <response code="200">Started (or already running); see the message.</response>
+    /// <response code="400">The request cannot be fulfilled; see the message.</response>
+    /// <returns>Result with a user-facing message.</returns>
     [HttpPost("Downloads")]
     [RequireRuTrackerRole(AccessRole.Download)]
     [ProducesResponseType(StatusCodes.Status200OK)]
