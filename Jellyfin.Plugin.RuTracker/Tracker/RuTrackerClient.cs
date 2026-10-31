@@ -654,6 +654,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         {
             ThrowIfCloudflareChallenge(baseUri, response, Cp1251.GetString(bytes));
         }
+
         const int MaxTorrentSize = 20 * 1024 * 1024;
         return bytes.Length is > 0 and <= MaxTorrentSize ? bytes : [];
     }
