@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Net.Http;
 using Jellyfin.Plugin.RuTracker.Tracker;
@@ -14,8 +15,8 @@ public class CloudflareDiagnosticsTests
         response.Headers.Add("cf-mitigated", "challenge");
         var result = CloudflareDiagnostics.Detect(response, string.Empty);
         Assert.NotNull(result);
-        Assert.Contains("HTTP 403", result);
-        Assert.Contains("cf-mitigated: challenge", result);
+        Assert.Contains("HTTP 403", result, StringComparison.Ordinal);
+        Assert.Contains("cf-mitigated: challenge", result, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -24,7 +25,7 @@ public class CloudflareDiagnosticsTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK);
         var result = CloudflareDiagnostics.Detect(response, "<html><script src=\"/cf-chl-example\"></script></html>");
         Assert.NotNull(result);
-        Assert.Contains("JavaScript/Managed Challenge", result);
+        Assert.Contains("JavaScript/Managed Challenge", result, StringComparison.Ordinal);
     }
 
     [Fact]
