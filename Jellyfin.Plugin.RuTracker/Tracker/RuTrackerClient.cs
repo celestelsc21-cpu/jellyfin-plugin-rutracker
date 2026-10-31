@@ -469,11 +469,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
                 ? CookieJar.Collect(pageCookies)
                 : new Dictionary<string, string>(StringComparer.Ordinal);
             var html = Cp1251.GetString(await page.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
-            if (TrackerHtmlParser.IsCloudflareChallenge(html))
-            {
-                throw new RuTrackerUnavailableException(
-                    $"{baseUri.Host} требует проверку Cloudflare. Введите cookie cf_clearance из браузера в настройках плагина.");
-            }
+            ThrowIfCloudflareChallenge(baseUri, page, html);
 
             if (!TrackerHtmlParser.LooksLikeRuTracker(html))
             {
@@ -499,7 +495,6 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             .Append("&login_password=").Append(HttpUtility.UrlEncode(config.RuTrackerPassword, Cp1251))
             .Append("&login=").Append(HttpUtility.UrlEncode("вход", Cp1251));
         var bodyBytes = Encoding.ASCII.GetBytes(body.ToString());
-        var cookieHeader = CookieJar.ToHeader(cookies);
 
         using var response = await SendAsync(
             () =>
@@ -509,10 +504,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
                 request.Headers.Referrer = loginUri;
                 request.Headers.Add("Origin", baseUri.GetLeftPart(UriPartial.Authority));
-                if (cookieHeader is not null)
-                {
-                    request.Headers.Add("Cookie", cookieHeader);
-                }
+                SetRequestCookies(request, cloudflareCookie, null, cookies);
 
                 return request;
             },
@@ -530,11 +522,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
         // 3. No session: explain why as precisely as possible.
         var status = (int)response.StatusCode;
         var responseHtml = Cp1251.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
-        if (TrackerHtmlParser.IsCloudflareChallenge(responseHtml))
-        {
-            throw new RuTrackerUnavailableException(
-                $"{baseUri.Host} требует проверку Cloudflare. Введите cookie cf_clearance из браузера в настройках плагина.");
-        }
+        ThrowIfCloudflareChallenge(baseUri, response, responseHtml);
 
         if (responseHtml.Length > 0 && !TrackerHtmlParser.LooksLikeRuTracker(responseHtml))
         {
@@ -601,10 +589,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
                 () =>
                 {
                     var request = CreateRequest(HttpMethod.Get, target, cloudflareCookie);
-                    if (session is not null)
-                    {
-                        request.Headers.Add("Cookie", SessionCookie.Name + "=" + session);
-                    }
+                    SetRequestCookies(request, cloudflareCookie, session);
 
                     return request;
                 },
@@ -633,6 +618,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             }
 
             var html = Cp1251.GetString(await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
+            ThrowIfCloudflareChallenge(baseUri, response, html);
             if (!TrackerHtmlParser.LooksLikeRuTracker(html))
             {
                 throw BlockPage(baseUri, html);
@@ -650,7 +636,7 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             () =>
             {
                 var request = CreateRequest(HttpMethod.Get, uri, cloudflareCookie);
-                request.Headers.Add("Cookie", SessionCookie.Name + "=" + session);
+                SetRequestCookies(request, cloudflareCookie, session);
                 request.Headers.Referrer = new Uri(baseUri, "forum/index.php");
                 return request;
             },
@@ -658,13 +644,28 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
 
         if (response.StatusCode != System.Net.HttpStatusCode.OK)
         {
+            ThrowIfCloudflareChallenge(baseUri, response, string.Empty);
             _logger.LogWarning("RuTracker .torrent download answered {Status}", (int)response.StatusCode);
             return [];
         }
 
         var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        if (string.Equals(response.Content.Headers.ContentType?.MediaType, "text/html", StringComparison.OrdinalIgnoreCase))
+        {
+            ThrowIfCloudflareChallenge(baseUri, response, Cp1251.GetString(bytes));
+        }
         const int MaxTorrentSize = 20 * 1024 * 1024;
         return bytes.Length is > 0 and <= MaxTorrentSize ? bytes : [];
+    }
+
+    private static void ThrowIfCloudflareChallenge(Uri baseUri, HttpResponseMessage response, string html)
+    {
+        var details = CloudflareDiagnostics.Detect(response, html);
+        if (details is not null)
+        {
+            throw new RuTrackerUnavailableException(
+                baseUri.Host + ": " + details + ". Проверьте cf_clearance и User-Agent в настройках плагина.");
+        }
     }
 
     private RuTrackerUnavailableException BlockPage(Uri baseUri, string html)
@@ -684,15 +685,30 @@ internal sealed class RuTrackerClient : IRuTrackerClient, IDisposable
             string.IsNullOrWhiteSpace(userAgent)
                 ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
                 : userAgent);
-        AddCloudflareCookie(request, cloudflareCookie);
+        SetRequestCookies(request, cloudflareCookie);
         return request;
     }
 
-    private static void AddCloudflareCookie(HttpRequestMessage request, string? cloudflareCookie)
+    private static void SetRequestCookies(HttpRequestMessage request, string? clearance, string? session = null, IReadOnlyDictionary<string, string>? serviceCookies = null)
     {
-        if (cloudflareCookie is not null)
+        var cookies = serviceCookies is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(serviceCookies, StringComparer.Ordinal);
+        if (clearance is not null)
         {
-            request.Headers.Add("Cookie", "cf_clearance=" + cloudflareCookie);
+            cookies["cf_clearance"] = clearance;
+        }
+
+        if (session is not null)
+        {
+            cookies[SessionCookie.Name] = session;
+        }
+
+        request.Headers.Remove("Cookie");
+        var value = CookieJar.ToHeader(cookies);
+        if (value is not null)
+        {
+            request.Headers.TryAddWithoutValidation("Cookie", value);
         }
     }
 
