@@ -953,6 +953,21 @@
                         change.addEventListener('click', function () { openStartDialog(d); });
                         buttons.appendChild(change);
                     }
+                    if (d.CanDelete && d.Kind !== 'Movie' && d.State === 'Completed') {
+                        var repair = el('button', 'secondary', 'Исправить названия серий');
+                        repair.type = 'button';
+                        repair.addEventListener('click', function () {
+                            if (!window.confirm('Переименовать серии через qBittorrent? Скачивать файлы повторно не потребуется.')) { return; }
+                            repair.disabled = true;
+                            api('RuTracker/Downloads/' + d.Id + '/RepairEpisodes', { method: 'POST' }).then(function (result) {
+                                toast('Переименовано файлов: ' + result.Renamed);
+                                refreshDownloads();
+                            }).catch(function (error) {
+                                toast(error.message, true);
+                            }).then(function () { repair.disabled = false; });
+                        });
+                        buttons.appendChild(repair);
+                    }
                     if (d.CanDelete) {
                         var remove = el('button', 'secondary danger', d.State === 'Completed' ? 'Убрать из списка' : 'Отменить');
                         remove.type = 'button';
