@@ -101,7 +101,7 @@ internal static partial class EpisodeFileNaming
                 && (defaultSeason is null || defaultSeason == season);
         }
 
-        if (defaultSeason is not >= 0 and <= 100)
+        if (defaultSeason is null || defaultSeason < 0 || defaultSeason > 100)
         {
             return false;
         }
