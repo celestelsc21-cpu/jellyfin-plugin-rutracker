@@ -78,9 +78,15 @@ jobs:
             --notes "Automated build for Jellyfin 10.11."
 
       - name: Update repository manifest
-        if: github.event_name != 'pull_request' && steps.check.outputs.exists == 'false'
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           pip install --quiet pyyaml
+          if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
+            gh release download "v${{ steps.meta.outputs.version }}" \
+              --pattern "rutracker_${{ steps.meta.outputs.version }}.zip"
+          fi
           git fetch origin manifest || true
           if git rev-parse --verify origin/manifest >/dev/null 2>&1; then
             git show origin/manifest:manifest.json > manifest.json
@@ -95,8 +101,11 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           tmp=$(mktemp -d)
           cp manifest.json "$tmp/"
+          rm manifest.json
           git switch -C manifest origin/manifest
           cp "$tmp/manifest.json" .
           git add manifest.json
-          git commit --quiet -m "Update manifest for v${{ steps.meta.outputs.version }}"
-          git push origin manifest
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m "Update manifest for v${{ steps.meta.outputs.version }}"
+            git push origin manifest
+          fi
