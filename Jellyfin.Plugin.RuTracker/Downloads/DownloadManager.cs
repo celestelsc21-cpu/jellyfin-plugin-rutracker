@@ -118,7 +118,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
 
         var layout = ResolveLayout(target, request, torrent.Title);
         var names = ReleaseTitle.Parse(torrent.Title).Names;
-        var renames = request.Kind == MediaKind.Movie || torrent.Meta is null
+        IReadOnlyList<EpisodeRenamePreviewDto> renames = request.Kind == MediaKind.Movie || torrent.Meta is null
             ? []
             : EpisodeFileNaming.Plan(torrent.Meta.Files, layout.Season, layout.Match?.Name ?? names.FirstOrDefault())
                 .Select(r => new EpisodeRenamePreviewDto(r.OldPath, r.NewPath)).ToList();
