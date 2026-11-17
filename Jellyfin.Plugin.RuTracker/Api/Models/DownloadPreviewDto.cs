@@ -7,4 +7,5 @@ namespace Jellyfin.Plugin.RuTracker.Api.Models;
 /// </summary>
 /// <param name="Folder">Destination name and folder inside it.</param>
 /// <param name="ExistingFolder">The movie or series folder already exists and is reused.</param>
+/// <param name="EpisodeRenames">Planned file rename operations.</param>
 public sealed record DownloadPreviewDto(string Folder, bool ExistingFolder, IReadOnlyList<EpisodeRenamePreviewDto> EpisodeRenames);
