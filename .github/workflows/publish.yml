@@ -95,9 +95,8 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           tmp=$(mktemp -d)
           cp manifest.json "$tmp/"
-          git checkout --orphan manifest-tmp
-          git rm -rf --quiet .
+          git switch -C manifest origin/manifest
           cp "$tmp/manifest.json" .
           git add manifest.json
           git commit --quiet -m "Update manifest for v${{ steps.meta.outputs.version }}"
-          git push --force origin manifest-tmp:manifest
+          git push origin manifest
