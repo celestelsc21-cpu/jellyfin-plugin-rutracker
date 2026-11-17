@@ -373,7 +373,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             }
 
             var files = await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
-            var updated = await RenameEpisodesAsync(record, files, cancellationToken).ConfigureAwait(false);
+            var updated = await RenameEpisodesAsync(record, files, cancellationToken, includePublished: true).ConfigureAwait(false);
             var oldNames = files.ToDictionary(f => f.Index, f => f.Name);
             var changed = updated.Where(f => oldNames.TryGetValue(f.Index, out var name)
                 && !string.Equals(name, f.Name, StringComparison.Ordinal)).Select(f => f.Index).ToHashSet();
@@ -718,7 +718,8 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
     private async Task<IReadOnlyList<QbFile>> RenameEpisodesAsync(
         DownloadRecord record,
         IReadOnlyList<QbFile> files,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool includePublished = false)
     {
         if (record.Kind == MediaKind.Movie)
         {
@@ -728,7 +729,8 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         var names = ReleaseTitle.Parse(record.Title).Names;
         var title = record.MatchName ?? names.FirstOrDefault();
         var operations = EpisodeFileNaming.Plan(
-            files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)),
+            files.Where(f => includePublished || !record.Published.Contains(f.Index))
+                .Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)),
             record.SeasonNumber,
             title);
         if (operations.Count == 0)
