@@ -74,6 +74,16 @@ public interface IQBittorrentClient
     Task SetFilePriorityAsync(string hash, IReadOnlyCollection<int> fileIndexes, int priority, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Renames one torrent file without modifying its file index or breaking seeding.
+    /// </summary>
+    /// <param name="hash">Torrent info hash.</param>
+    /// <param name="oldPath">Current relative file path.</param>
+    /// <param name="newPath">New relative file path.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task.</returns>
+    Task RenameFileAsync(string hash, string oldPath, string newPath, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Starts (resumes) a torrent.
     /// </summary>
     /// <param name="hash">Info hash.</param>
