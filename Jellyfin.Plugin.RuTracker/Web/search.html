@@ -347,6 +347,10 @@
                 <div class="hint">Список серий станет известен после начала загрузки. Загружается вся раздача, выбранная серия — первой.</div>
             </div>
             <div class="hint" id="dialogFolder"></div>
+            <div class="field" id="episodePreview" hidden>
+                <label>Переименование серий через qBittorrent</label>
+                <div class="hint" id="episodePreviewList"></div>
+            </div>
             <div class="hint">Смотреть, не дожидаясь конца загрузки, можно в канале «RuTracker» (Главная → Каналы). Готовые серии сами появятся в медиатеке.</div>
             <div class="status" id="dialogStatus"></div>
             <div class="actions">
@@ -715,6 +719,7 @@
                 numberField.hidden = true;
                 document.getElementById('dialogStartNumber').value = '1';
                 setText('dialogFolder', '');
+                document.getElementById('episodePreview').hidden = true;
                 startSelect.textContent = '';
                 topicSeason = null;
                 document.getElementById('dialogSeason').value = '';
@@ -829,7 +834,11 @@
                     api('RuTracker/Downloads/Preview', { method: 'POST', body: requestBody() }).then(function (p) {
                         if (dialogItem !== item) { return; }
                         setText('dialogFolder', 'Папка: ' + p.Folder + (p.ExistingFolder ? ' (папка сериала уже есть — новые серии добавятся в неё)' : ''));
-                    }).catch(function () { setText('dialogFolder', ''); });
+                        var renames = p.EpisodeRenames || [];
+                        document.getElementById('episodePreview').hidden = renames.length === 0;
+                        setText('episodePreviewList', renames.map(function (r) { return r.OldPath + ' → ' + r.NewPath; }).join('\n'));
+                        document.getElementById('episodePreviewList').style.whiteSpace = 'pre-wrap';
+                    }).catch(function () { setText('dialogFolder', ''); document.getElementById('episodePreview').hidden = true; });
                 }, 300);
             }
 
