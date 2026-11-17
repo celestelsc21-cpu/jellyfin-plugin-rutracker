@@ -81,6 +81,16 @@ public interface IDownloadManager
     Task DeleteAsync(Guid id, bool deleteFiles, Guid callerId, bool isAdministrator, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Renames episodes in an existing download using qBittorrent.
+    /// </summary>
+    /// <param name="id">Download identifier.</param>
+    /// <param name="callerId">Requesting user.</param>
+    /// <param name="isAdministrator">Whether the user is an administrator.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Number of renamed episode files.</returns>
+    Task<int> RepairEpisodeNamesAsync(Guid id, Guid callerId, bool isAdministrator, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Synchronises every active download with qBittorrent.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
