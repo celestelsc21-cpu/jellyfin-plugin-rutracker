@@ -117,7 +117,12 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         }
 
         var layout = ResolveLayout(target, request, torrent.Title);
-        return new DownloadPreviewDto(target.Name + "/" + layout.RelativeFolder, layout.ExistingFolder);
+        var names = ReleaseTitle.Parse(torrent.Title).Names;
+        IReadOnlyList<EpisodeRenamePreviewDto> renames = request.Kind == MediaKind.Movie || torrent.Meta is null
+            ? []
+            : EpisodeFileNaming.Plan(torrent.Meta.Files, layout.Season, layout.Match?.Name ?? (names.Count > 0 ? names[0] : null))
+                .Select(r => new EpisodeRenamePreviewDto(r.OldPath, r.NewPath)).ToList();
+        return new DownloadPreviewDto(target.Name + "/" + layout.RelativeFolder, layout.ExistingFolder, renames);
     }
 
     /// <summary>
@@ -348,6 +353,56 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         await _store.UpdateAsync(list => list.RemoveAll(r => r.Id == id), save: true, cancellationToken).ConfigureAwait(false);
         _snapshots.TryRemove(id, out _);
         _logger.LogInformation("Download {Id} removed by user {UserId} (files deleted: {DeleteFiles})", id, callerId, deleteFiles);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> RepairEpisodeNamesAsync(Guid id, Guid callerId, bool isAdministrator, CancellationToken cancellationToken)
+    {
+        await _processGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var record = await FindAsync(id, cancellationToken).ConfigureAwait(false);
+            if (!isAdministrator && record.UserId != callerId)
+            {
+                throw new UnauthorizedAccessException("Исправить имена серий может только автор загрузки или администратор.");
+            }
+
+            if (record.Kind == MediaKind.Movie || record.State != DownloadState.Completed)
+            {
+                throw new DownloadException("Исправление доступно только для завершённой загрузки сериала или передачи.");
+            }
+
+            var files = await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
+            var updated = await RenameEpisodesAsync(record, files, cancellationToken, includePublished: true).ConfigureAwait(false);
+            var oldNames = files.ToDictionary(f => f.Index, f => f.Name);
+            var changed = updated.Where(f => oldNames.TryGetValue(f.Index, out var name)
+                && !string.Equals(name, f.Name, StringComparison.Ordinal)).Select(f => f.Index).ToHashSet();
+            if (changed.Count == 0)
+            {
+                return 0;
+            }
+
+            record.Published.RemoveAll(changed.Contains);
+            await _publisher.PublishAsync(record, updated, cancellationToken).ConfigureAwait(false);
+            await _store.UpdateAsync(
+                list =>
+                {
+                    var live = list.FirstOrDefault(r => r.Id == id);
+                    if (live is not null)
+                    {
+                        live.Published = record.Published;
+                    }
+
+                    return true;
+                },
+                save: true,
+                cancellationToken).ConfigureAwait(false);
+            return changed.Count;
+        }
+        finally
+        {
+            _processGate.Release();
+        }
     }
 
     /// <summary>
@@ -594,6 +649,10 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             return false; // magnet link still fetching metadata
         }
 
+        // Rename only confirmed episode filenames; qBittorrent performs the disk operation.
+        // File indexes remain unchanged, so priorities and streaming keep working.
+        files = await RenameEpisodesAsync(record, files, cancellationToken).ConfigureAwait(false);
+
         var changed = false;
         var entries = files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)).ToList();
         if (record.Order.Count == 0)
@@ -654,6 +713,59 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             record.Order.Count,
             record.Order.Count(IsComplete));
         return changed;
+    }
+
+    private async Task<IReadOnlyList<QbFile>> RenameEpisodesAsync(
+        DownloadRecord record,
+        IReadOnlyList<QbFile> files,
+        CancellationToken cancellationToken,
+        bool includePublished = false)
+    {
+        if (record.Kind == MediaKind.Movie)
+        {
+            return files;
+        }
+
+        var names = ReleaseTitle.Parse(record.Title).Names;
+        var title = record.MatchName ?? (names.Count > 0 ? names[0] : null);
+        var operations = EpisodeFileNaming.Plan(
+            files.Where(f => includePublished || !record.Published.Contains(f.Index))
+                .Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)),
+            record.SeasonNumber,
+            title);
+        if (operations.Count == 0)
+        {
+            return files;
+        }
+
+        // Prevent Jellyfin from picking up incomplete files under their new names.
+        if (!record.CopyToLibrary)
+        {
+            _publisher.HideBeforeStart(
+                record.JellyfinFolder,
+                files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size))
+                    .Concat(operations.Select(o => new TorrentFileEntry(o.Index, o.NewPath, 0))));
+        }
+
+        foreach (var operation in operations)
+        {
+            try
+            {
+                await _qbittorrent.RenameFileAsync(record.InfoHash, operation.OldPath, operation.NewPath, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (QBittorrentException ex)
+            {
+                _logger.LogWarning(
+                    "Could not rename episode file {FileIndex} for download {Id}: {Reason}",
+                    operation.Index,
+                    record.Id,
+                    ex.Message);
+                break;
+            }
+        }
+
+        return await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
     }
 
     private static long? Eta(QbTorrent torrent) => torrent.Eta is > 0 and < 8640000 ? torrent.Eta : null;

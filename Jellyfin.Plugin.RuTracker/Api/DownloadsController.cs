@@ -223,6 +223,22 @@ public class DownloadsController : ControllerBase
         }).ConfigureAwait(false);
 
     /// <summary>
+    /// Fixes episode file names of a completed download without downloading it again.
+    /// </summary>
+    /// <param name="id">Download identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Number of renamed files.</returns>
+    [HttpPost("Downloads/{id}/RepairEpisodes")]
+    [RequireRuTrackerRole(AccessRole.Download)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> RepairEpisodes([FromRoute] Guid id, CancellationToken cancellationToken)
+        => await Guard(async () =>
+        {
+            var count = await _manager.RepairEpisodeNamesAsync(id, CallerId(), IsAdministrator(), cancellationToken).ConfigureAwait(false);
+            return Ok(new { Renamed = count });
+        }).ConfigureAwait(false);
+
+    /// <summary>
     /// Cancels a download (only its starter or an administrator).
     /// </summary>
     /// <param name="id">Download id.</param>
