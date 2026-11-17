@@ -112,7 +112,7 @@ internal static partial class EpisodeFileNaming
             return false;
         }
 
-        season = defaultSeason.Value;
+        season = defaultSeason.GetValueOrDefault();
         return episode is >= 1 and <= 10000;
     }
 
@@ -122,11 +122,3 @@ internal static partial class EpisodeFileNaming
     [GeneratedRegex(@"(?:^|[\s._-])(?:серия[\s._-]*(?<e>\d{1,3})|(?<e>\d{1,3})[\s._-]*серия)(?:$|[\s._-])", RegexOptions.IgnoreCase)]
     private static partial Regex EpisodeNumber();
 }
-
-/// <summary>
-/// An index-preserving torrent file rename.
-/// </summary>
-/// <param name="Index">Torrent file index.</param>
-/// <param name="OldPath">Current path inside the torrent.</param>
-/// <param name="NewPath">Proposed path inside the torrent.</param>
-internal sealed record EpisodeFileRename(int Index, string OldPath, string NewPath);
