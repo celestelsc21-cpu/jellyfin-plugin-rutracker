@@ -117,7 +117,12 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         }
 
         var layout = ResolveLayout(target, request, torrent.Title);
-        return new DownloadPreviewDto(target.Name + "/" + layout.RelativeFolder, layout.ExistingFolder);
+        var names = ReleaseTitle.Parse(torrent.Title).Names;
+        var renames = request.Kind == MediaKind.Movie || torrent.Meta is null
+            ? []
+            : EpisodeFileNaming.Plan(torrent.Meta.Files, layout.Season, layout.Match?.Name ?? names.FirstOrDefault())
+                .Select(r => new EpisodeRenamePreviewDto(r.OldPath, r.NewPath)).ToList();
+        return new DownloadPreviewDto(target.Name + "/" + layout.RelativeFolder, layout.ExistingFolder, renames);
     }
 
     /// <summary>
