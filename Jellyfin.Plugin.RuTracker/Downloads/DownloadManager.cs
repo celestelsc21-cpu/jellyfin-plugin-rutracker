@@ -594,6 +594,10 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             return false; // magnet link still fetching metadata
         }
 
+        // Rename only confirmed episode filenames; qBittorrent performs the disk operation.
+        // File indexes remain unchanged, so priorities and streaming keep working.
+        files = await RenameEpisodesAsync(record, files, cancellationToken).ConfigureAwait(false);
+
         var changed = false;
         var entries = files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)).ToList();
         if (record.Order.Count == 0)
@@ -654,6 +658,57 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
             record.Order.Count,
             record.Order.Count(IsComplete));
         return changed;
+    }
+
+    private async Task<IReadOnlyList<QbFile>> RenameEpisodesAsync(
+        DownloadRecord record,
+        IReadOnlyList<QbFile> files,
+        CancellationToken cancellationToken)
+    {
+        if (record.Kind == MediaKind.Movie)
+        {
+            return files;
+        }
+
+        var names = ReleaseTitle.Parse(record.Title).Names;
+        var title = record.MatchName ?? names.FirstOrDefault();
+        var operations = EpisodeFileNaming.Plan(
+            files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)),
+            record.SeasonNumber,
+            title);
+        if (operations.Count == 0)
+        {
+            return files;
+        }
+
+        // Prevent Jellyfin from picking up incomplete files under their new names.
+        if (!record.CopyToLibrary)
+        {
+            _publisher.HideBeforeStart(
+                record.JellyfinFolder,
+                files.Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size))
+                    .Concat(operations.Select(o => new TorrentFileEntry(o.Index, o.NewPath, 0))));
+        }
+
+        foreach (var operation in operations)
+        {
+            try
+            {
+                await _qbittorrent.RenameFileAsync(record.InfoHash, operation.OldPath, operation.NewPath, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (QBittorrentException ex)
+            {
+                _logger.LogWarning(
+                    "Could not rename episode file {FileIndex} for download {Id}: {Reason}",
+                    operation.Index,
+                    record.Id,
+                    ex.Message);
+                break;
+            }
+        }
+
+        return await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
     }
 
     private static long? Eta(QbTorrent torrent) => torrent.Eta is > 0 and < 8640000 ? torrent.Eta : null;
