@@ -355,6 +355,56 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         _logger.LogInformation("Download {Id} removed by user {UserId} (files deleted: {DeleteFiles})", id, callerId, deleteFiles);
     }
 
+    /// <inheritdoc />
+    public async Task<int> RepairEpisodeNamesAsync(Guid id, Guid callerId, bool isAdministrator, CancellationToken cancellationToken)
+    {
+        await _processGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var record = await FindAsync(id, cancellationToken).ConfigureAwait(false);
+            if (!isAdministrator && record.UserId != callerId)
+            {
+                throw new UnauthorizedAccessException("Исправить имена серий может только автор загрузки или администратор.");
+            }
+
+            if (record.Kind == MediaKind.Movie || record.State != DownloadState.Completed)
+            {
+                throw new DownloadException("Исправление доступно только для завершённой загрузки сериала или передачи.");
+            }
+
+            var files = await _qbittorrent.GetFilesAsync(record.InfoHash, cancellationToken).ConfigureAwait(false);
+            var updated = await RenameEpisodesAsync(record, files, cancellationToken).ConfigureAwait(false);
+            var oldNames = files.ToDictionary(f => f.Index, f => f.Name);
+            var changed = updated.Where(f => oldNames.TryGetValue(f.Index, out var name)
+                && !string.Equals(name, f.Name, StringComparison.Ordinal)).Select(f => f.Index).ToHashSet();
+            if (changed.Count == 0)
+            {
+                return 0;
+            }
+
+            record.Published.RemoveAll(changed.Contains);
+            await _publisher.PublishAsync(record, updated, cancellationToken).ConfigureAwait(false);
+            await _store.UpdateAsync(
+                list =>
+                {
+                    var live = list.FirstOrDefault(r => r.Id == id);
+                    if (live is not null)
+                    {
+                        live.Published = record.Published;
+                    }
+
+                    return true;
+                },
+                save: true,
+                cancellationToken).ConfigureAwait(false);
+            return changed.Count;
+        }
+        finally
+        {
+            _processGate.Release();
+        }
+    }
+
     /// <summary>
     /// Synchronises every active download with qBittorrent: applies priorities in
     /// watching order, starts torrents and refreshes progress.
