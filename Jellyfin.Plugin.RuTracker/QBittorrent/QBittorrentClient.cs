@@ -191,6 +191,18 @@ internal sealed class QBittorrentClient : IQBittorrentClient, IDisposable
     }
 
     /// <inheritdoc />
+    public Task RenameFileAsync(string hash, string oldPath, string newPath, CancellationToken cancellationToken)
+        => PostFormAsync(
+            "api/v2/torrents/renameFile",
+            new Dictionary<string, string>
+            {
+                ["hash"] = hash,
+                ["oldPath"] = oldPath,
+                ["newPath"] = newPath
+            },
+            cancellationToken);
+
+    /// <inheritdoc />
     public async Task StartAsync(string hash, CancellationToken cancellationToken)
     {
         var form = new Dictionary<string, string> { ["hashes"] = hash };
