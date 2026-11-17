@@ -136,9 +136,9 @@ jprm --verbosity=debug plugin build .
 
 ```bash
 # каталог config смонтирован в контейнер как /config
-mkdir -p /home/jellyfin/config/plugins/RuTracker_0.1.0.0
+mkdir -p /home/jellyfin/config/plugins/RuTracker_0.5.1.0
 cp Jellyfin.Plugin.RuTracker/bin/Release/net9.0/Jellyfin.Plugin.RuTracker.dll \
-   /home/jellyfin/config/plugins/RuTracker_0.1.0.0/
+   /home/jellyfin/config/plugins/RuTracker_0.5.1.0/
 docker restart jellyfin
 ```
 
