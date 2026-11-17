@@ -120,7 +120,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         var names = ReleaseTitle.Parse(torrent.Title).Names;
         IReadOnlyList<EpisodeRenamePreviewDto> renames = request.Kind == MediaKind.Movie || torrent.Meta is null
             ? []
-            : EpisodeFileNaming.Plan(torrent.Meta.Files, layout.Season, layout.Match?.Name ?? names.FirstOrDefault())
+            : EpisodeFileNaming.Plan(torrent.Meta.Files, layout.Season, layout.Match?.Name ?? (names.Count > 0 ? names[0] : null))
                 .Select(r => new EpisodeRenamePreviewDto(r.OldPath, r.NewPath)).ToList();
         return new DownloadPreviewDto(target.Name + "/" + layout.RelativeFolder, layout.ExistingFolder, renames);
     }
@@ -727,7 +727,7 @@ internal sealed class DownloadManager : IDownloadManager, IDisposable
         }
 
         var names = ReleaseTitle.Parse(record.Title).Names;
-        var title = record.MatchName ?? names.FirstOrDefault();
+        var title = record.MatchName ?? (names.Count > 0 ? names[0] : null);
         var operations = EpisodeFileNaming.Plan(
             files.Where(f => includePublished || !record.Published.Contains(f.Index))
                 .Select(f => new TorrentFileEntry(f.Index, f.Name, f.Size)),
