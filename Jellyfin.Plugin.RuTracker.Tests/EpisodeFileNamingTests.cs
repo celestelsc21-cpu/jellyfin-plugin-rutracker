@@ -42,6 +42,38 @@ public class EpisodeFileNamingTests
         Assert.Equal("Season/Как приручить лису - S01E02.mkv", result[1].NewPath);
     }
 
+    [Theory]
+    [InlineData("Show.S01E02.1080p.mkv")]
+    [InlineData("Show.S01E02.WEB-DL.mkv")]
+    [InlineData("Show - S1E2.mkv")]
+    [InlineData("Show.1x02.mkv")]
+    [InlineData("Show.S02E04.mkv")]
+    public void Plan_PreservesFilesWithCompleteEpisodeMarkers(string name)
+    {
+        var files = new List<TorrentFileEntry>
+        {
+            new(0, name, 100)
+        };
+
+        Assert.Empty(EpisodeFileNaming.Plan(files, 1, "Show"));
+    }
+
+    [Fact]
+    public void Plan_RenamesOnlyUnmarkedEpisodesInMixedTorrent()
+    {
+        var files = new List<TorrentFileEntry>
+        {
+            new(0, "Show.S01E01.WEB-DL.mkv", 100),
+            new(1, "02 серия_Show.mkv", 100)
+        };
+
+        var result = EpisodeFileNaming.Plan(files, 1, "Show");
+
+        Assert.Single(result);
+        Assert.Equal(1, result[0].Index);
+        Assert.Equal("Show - S01E02.mkv", result[0].NewPath);
+    }
+
     [Fact]
     public void Plan_DoesNotOverwriteExistingFiles()
     {
