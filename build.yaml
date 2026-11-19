@@ -1,6 +1,6 @@
 name: "RuTracker"
 guid: "6b8f3c2e-4d1a-4f7e-9c5b-2a8e7d1f0b93"
-version: "0.5.1.0"
+version: "0.5.2.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Search RuTracker and download/stream torrents via qBittorrent"
@@ -14,6 +14,9 @@ artifacts:
   - "Jellyfin.Plugin.RuTracker.dll"
   - "AngleSharp.dll"
 changelog: |
+  0.5.2.0 - Keep original torrent filenames containing complete season and episode
+  markers (S01E02, S1E2, 1x02); preserve quality tags and release information.
+  Rename only files that need a Jellyfin-friendly episode marker.
   0.5.1.0 - Recognize episode numbers in torrent filenames; rename via qBittorrent Web API
   without changing file indexes or duplicating media. Preview renames before downloading;
   allow explicit repair of completed series downloads. Ambiguous files are left unchanged.
