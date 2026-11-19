@@ -46,6 +46,13 @@ internal static partial class EpisodeFileNaming
         {
             var path = file.Path.Replace('\\', '/');
             var name = Path.GetFileNameWithoutExtension(path);
+            // Jellyfin already understands complete season/episode markers.
+            // Keep the original release name, quality tags and other information.
+            if (SeasonEpisode().IsMatch(name))
+            {
+                continue;
+            }
+
             if (!TryParse(name, season, out var fileSeason, out var episode))
             {
                 continue;
